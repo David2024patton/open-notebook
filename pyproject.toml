@@ -43,6 +43,7 @@ dependencies = [
     "babel>=2.18.0",
     "pyjwt>=2.8.0",
     "bcrypt>=4.1.2",
+    "markdown>=3.7",
 ]
 
 [tool.setuptools]
