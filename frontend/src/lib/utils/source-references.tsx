@@ -1,5 +1,5 @@
 import React from 'react'
-import { FileText, Lightbulb, FileEdit } from 'lucide-react'
+import { FileText, Lightbulb, FileEdit, ExternalLink } from 'lucide-react'
 
 export type ReferenceType = 'source' | 'note' | 'source_insight'
 
@@ -281,11 +281,13 @@ export function createReferenceLinkComponent(
       const type = parts[0] as ReferenceType
       const id = parts.slice(1).join('-') // Rejoin in case ID has dashes
 
-      // Select appropriate icon based on reference type
-      const IconComponent =
-        type === 'source' ? FileText :
-        type === 'source_insight' ? Lightbulb :
-        FileEdit // note
+      // Select appropriate icon and color based on reference type
+      const iconMap = {
+        source: { icon: FileText, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/60', label: 'Source' },
+        source_insight: { icon: Lightbulb, color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/60', label: 'Insight' },
+        note: { icon: FileEdit, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/60', label: 'Note' },
+      }
+      const { icon: IconComponent, color, label } = iconMap[type] || iconMap.source
 
       return (
         <button
@@ -294,11 +296,13 @@ export function createReferenceLinkComponent(
             e.stopPropagation()
             onReferenceClick(type, id)
           }}
-          className="text-primary hover:underline cursor-pointer inline font-medium"
+          className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold cursor-pointer transition-colors ${color}`}
           type="button"
+          title={`Open ${label}: ${children}`}
         >
-          <IconComponent className="h-3 w-3 inline mr-1" aria-hidden="true" />
+          <IconComponent className="h-3 w-3" aria-hidden="true" />
           {children}
+          <ExternalLink className="h-2.5 w-2.5 opacity-50" aria-hidden="true" />
         </button>
       )
     }
@@ -396,12 +400,13 @@ export function convertReferencesToCompactMarkdown(text: string, referencesLabel
     result = result.substring(0, replaceStart) + citationLink + result.substring(replaceEnd)
   }
 
-  // Step 5: Build reference list
-  const refListLines: string[] = [`\n\n${referencesLabel}:`]
+  // Step 5: Build reference list with prominent styling
+  const refListLines: string[] = [`\n\n---\n\n**${referencesLabel}**\n`]
 
   // Iterate through reference map in insertion order (Map preserves order)
   for (const [, refData] of referenceMap) {
-    const refListItem = `[${refData.number}] - [${refData.type}:${refData.id}](#ref-${refData.type}-${refData.id})`
+    const typeLabel = refData.type === 'source' ? 'Source' : refData.type === 'source_insight' ? 'Insight' : 'Note'
+    const refListItem = `[${refData.number}] **[${typeLabel}]** [${refData.type}:${refData.id}](#ref-${refData.type}-${refData.id})`
     refListLines.push(refListItem)
   }
 
@@ -446,6 +451,35 @@ export function createCompactReferenceLinkComponent(
       const type = parts[0] as ReferenceType
       const id = parts.slice(1).join('-') // Rejoin in case ID has dashes
 
+      // Determine if this is a numbered citation [1] or a reference list item [source:abc]
+      const isNumberedCitation = typeof children === 'string' && /^\d+$/.test(children)
+
+      if (isNumberedCitation) {
+        // Numbered citation: styled as a superscript badge
+        return (
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onReferenceClick(type, id)
+            }}
+            className="inline-flex items-center justify-center h-5 min-w-[20px] rounded bg-primary/10 text-primary text-xs font-bold cursor-pointer hover:bg-primary/20 transition-colors align-super mx-0.5"
+            type="button"
+            title={`View ${type}: ${id}`}
+          >
+            {children}
+          </button>
+        )
+      }
+
+      // Reference list item: styled as a clickable row
+      const iconMap = {
+        source: FileText,
+        source_insight: Lightbulb,
+        note: FileEdit,
+      }
+      const IconComponent = iconMap[type] || FileText
+
       return (
         <button
           onClick={(e) => {
@@ -453,10 +487,12 @@ export function createCompactReferenceLinkComponent(
             e.stopPropagation()
             onReferenceClick(type, id)
           }}
-          className="text-primary hover:underline cursor-pointer inline font-medium"
+          className="inline-flex items-center gap-1.5 text-sm text-foreground hover:text-primary cursor-pointer transition-colors"
           type="button"
         >
+          <IconComponent className="h-3.5 w-3.5 text-muted-foreground" />
           {children}
+          <ExternalLink className="h-3 w-3 text-muted-foreground opacity-50" />
         </button>
       )
     }

@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { CheckCircle, Sparkles, Lightbulb, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { CheckCircle, Sparkles, Lightbulb, ChevronDown, FileText, ExternalLink } from 'lucide-react'
+import { useState, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { convertReferencesToMarkdownLinks, createReferenceLinkComponent } from '@/lib/utils/source-references'
+import { convertReferencesToMarkdownLinks, createReferenceLinkComponent, parseSourceReferences, type ReferenceType } from '@/lib/utils/source-references'
 import { useModalManager } from '@/lib/hooks/use-modal-manager'
 import { useTranslation } from '@/lib/hooks/use-translation'
 import { toast } from 'sonner'
@@ -166,32 +166,92 @@ function FinalAnswerContent({
   content: string
   onReferenceClick: (type: string, id: string) => void
 }) {
+  const { t } = useTranslation()
   // Convert references to markdown links
   const markdownWithLinks = convertReferencesToMarkdownLinks(content)
 
   // Create custom link component
   const LinkComponent = createReferenceLinkComponent(onReferenceClick)
 
+  // Extract unique references for the Sources Referenced section
+  const references = useMemo(() => {
+    const refs = parseSourceReferences(content)
+    const seen = new Set<string>()
+    return refs.filter((r) => {
+      const key = `${r.type}:${r.id}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [content])
+
+  const typeLabels: Record<ReferenceType, string> = {
+    source: 'Source',
+    source_insight: 'Insight',
+    note: 'Note',
+  }
+
+  const typeColors: Record<ReferenceType, string> = {
+    source: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+    source_insight: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+    note: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
+  }
+
+  const typeIcons: Record<ReferenceType, typeof FileText> = {
+    source: FileText,
+    source_insight: Lightbulb,
+    note: FileText,
+  }
+
   return (
-    <div className="prose prose-sm max-w-none dark:prose-invert break-words prose-a:break-all prose-p:leading-relaxed prose-headings:mt-4 prose-headings:mb-2">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: LinkComponent,
-          table: ({ children }) => (
-            <div className="my-4 overflow-x-auto">
-              <table className="min-w-full border-collapse border border-border">{children}</table>
-            </div>
-          ),
-          thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
-          tbody: ({ children }) => <tbody>{children}</tbody>,
-          tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
-          th: ({ children }) => <th className="border border-border px-3 py-2 text-left font-semibold">{children}</th>,
-          td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
-        }}
-      >
-        {markdownWithLinks}
-      </ReactMarkdown>
+    <div className="space-y-4">
+      <div className="prose prose-sm max-w-none dark:prose-invert break-words prose-a:break-all prose-p:leading-relaxed prose-headings:mt-4 prose-headings:mb-2">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: LinkComponent,
+            table: ({ children }) => (
+              <div className="my-4 overflow-x-auto">
+                <table className="min-w-full border-collapse border border-border">{children}</table>
+              </div>
+            ),
+            thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+            tbody: ({ children }) => <tbody>{children}</tbody>,
+            tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
+            th: ({ children }) => <th className="border border-border px-3 py-2 text-left font-semibold">{children}</th>,
+            td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
+          }}
+        >
+          {markdownWithLinks}
+        </ReactMarkdown>
+      </div>
+
+      {/* Sources Referenced Section */}
+      {references.length > 0 && (
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            <FileText className="h-3.5 w-3.5" />
+            Sources Referenced ({references.length})
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {references.map((ref, i) => {
+              const Icon = typeIcons[ref.type]
+              return (
+                <button
+                  key={`${ref.type}-${ref.id}-${i}`}
+                  onClick={() => onReferenceClick(ref.type, ref.id)}
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium cursor-pointer transition-colors hover:opacity-80 ${typeColors[ref.type]}`}
+                  type="button"
+                >
+                  <Icon className="h-3 w-3" />
+                  {typeLabels[ref.type]}
+                  <ExternalLink className="h-2.5 w-2.5 opacity-50" />
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
