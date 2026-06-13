@@ -23,6 +23,7 @@ from api.routers import (
     embedding_rebuild,
     episode_profiles,
     export,
+    flashcards,
     insights,
     languages,
     models,
@@ -314,6 +315,7 @@ app.include_router(source_chat.router, prefix="/api", tags=["source-chat"])
 app.include_router(credentials.router, prefix="/api", tags=["credentials"])
 app.include_router(languages.router, prefix="/api", tags=["languages"])
 app.include_router(export.router, prefix="/api", tags=["export"])
+app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
 
 
 @app.get("/")
