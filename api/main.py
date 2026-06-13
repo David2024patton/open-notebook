@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import AuthMiddleware
 from api.routers import (
+    artifacts,
     auth,
     chat,
     config,
@@ -318,6 +319,7 @@ app.include_router(languages.router, prefix="/api", tags=["languages"])
 app.include_router(export.router, prefix="/api", tags=["export"])
 app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
 app.include_router(discovery.router, prefix="/api", tags=["discovery"])
+app.include_router(artifacts.router, prefix="/api", tags=["artifacts"])
 
 
 @app.get("/")
