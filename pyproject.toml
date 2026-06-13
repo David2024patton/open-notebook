@@ -44,6 +44,7 @@ dependencies = [
     "pyjwt>=2.8.0",
     "bcrypt>=4.1.2",
     "markdown>=3.7",
+    "yfinance>=0.2.40",
 ]
 
 [tool.setuptools]

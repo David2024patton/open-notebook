@@ -25,6 +25,7 @@ from api.routers import (
     embedding_rebuild,
     episode_profiles,
     export,
+    finance,
     flashcards,
     insights,
     languages,
@@ -320,6 +321,7 @@ app.include_router(export.router, prefix="/api", tags=["export"])
 app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
 app.include_router(discovery.router, prefix="/api", tags=["discovery"])
 app.include_router(artifacts.router, prefix="/api", tags=["artifacts"])
+app.include_router(finance.router, prefix="/api", tags=["finance"])
 
 
 @app.get("/")
