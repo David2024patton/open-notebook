@@ -19,6 +19,7 @@ from api.routers import (
     config,
     context,
     credentials,
+    discovery,
     embedding,
     embedding_rebuild,
     episode_profiles,
@@ -316,6 +317,7 @@ app.include_router(credentials.router, prefix="/api", tags=["credentials"])
 app.include_router(languages.router, prefix="/api", tags=["languages"])
 app.include_router(export.router, prefix="/api", tags=["export"])
 app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
+app.include_router(discovery.router, prefix="/api", tags=["discovery"])
 
 
 @app.get("/")
