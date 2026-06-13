@@ -79,14 +79,66 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   openai_compatible: 'OpenAI Compatible',
   dashscope: 'DashScope (Qwen)',
   minimax: 'MiniMax',
+  lmstudio: 'LM Studio',
+  jan: 'Jan',
+  gpt4all: 'GPT4All',
+  localai: 'LocalAI',
+  llamacpp: 'llama.cpp',
+  koboldcpp: 'KoboldCpp',
+  vllm: 'vLLM',
+  textgenwebui: 'text-generation-webui',
+}
+
+// Provider categories for grouping
+const PROVIDER_CATEGORIES: Record<string, string> = {
+  openai: 'Cloud',
+  anthropic: 'Cloud',
+  google: 'Cloud',
+  groq: 'Cloud',
+  mistral: 'Cloud',
+  deepseek: 'Cloud',
+  xai: 'Cloud',
+  openrouter: 'Cloud',
+  dashscope: 'Cloud',
+  minimax: 'Cloud',
+  voyage: 'Cloud',
+  elevenlabs: 'Cloud',
+  deepgram: 'Cloud',
+  azure: 'Cloud',
+  vertex: 'Cloud',
+  ollama: 'Local',
+  openai_compatible: 'Local',
+  lmstudio: 'Local',
+  jan: 'Local',
+  gpt4all: 'Local',
+  localai: 'Local',
+  llamacpp: 'Local',
+  koboldcpp: 'Local',
+  vllm: 'Local',
+  textgenwebui: 'Local',
 }
 
 // All providers in display order
 const ALL_PROVIDERS = [
   'openai', 'anthropic', 'google', 'groq', 'mistral', 'deepseek',
-  'xai', 'openrouter', 'dashscope', 'minimax', 'voyage', 'elevenlabs', 'deepgram', 'ollama',
-  'azure', 'vertex', 'openai_compatible',
+  'xai', 'openrouter', 'dashscope', 'minimax', 'voyage', 'elevenlabs', 'deepgram',
+  'azure', 'vertex',
+  'ollama', 'lmstudio', 'jan', 'gpt4all', 'localai', 'llamacpp', 'koboldcpp', 'vllm', 'textgenwebui', 'openai_compatible',
 ]
+
+// Local LLM provider default base URLs
+const LOCAL_LLM_DEFAULTS: Record<string, { baseUrl: string; description: string; port: number }> = {
+  ollama: { baseUrl: 'http://localhost:11434', description: 'Local models via Ollama', port: 11434 },
+  lmstudio: { baseUrl: 'http://localhost:1234/v1', description: 'Local models via LM Studio', port: 1234 },
+  jan: { baseUrl: 'http://localhost:1337/v1', description: 'Local models via Jan', port: 1337 },
+  gpt4all: { baseUrl: 'http://localhost:4891/v1', description: 'Local models via GPT4All', port: 4891 },
+  localai: { baseUrl: 'http://localhost:8080/v1', description: 'Local models via LocalAI', port: 8080 },
+  llamacpp: { baseUrl: 'http://localhost:8080/v1', description: 'Local models via llama.cpp server', port: 8080 },
+  koboldcpp: { baseUrl: 'http://localhost:5001/v1', description: 'Local models via KoboldCpp', port: 5001 },
+  vllm: { baseUrl: 'http://localhost:8000/v1', description: 'Local models via vLLM', port: 8000 },
+  textgenwebui: { baseUrl: 'http://localhost:5000/v1', description: 'Local models via text-generation-webui', port: 5000 },
+  openai_compatible: { baseUrl: '', description: 'Any OpenAI-compatible API server', port: 0 },
+}
 
 // Default modalities per provider
 const PROVIDER_MODALITIES: Record<string, ModelType[]> = {
@@ -107,6 +159,14 @@ const PROVIDER_MODALITIES: Record<string, ModelType[]> = {
   openai_compatible: ['language', 'embedding', 'text_to_speech', 'speech_to_text'],
   dashscope: ['language'],
   minimax: ['language'],
+  lmstudio: ['language', 'embedding'],
+  jan: ['language'],
+  gpt4all: ['language'],
+  localai: ['language', 'embedding', 'text_to_speech', 'speech_to_text'],
+  llamacpp: ['language'],
+  koboldcpp: ['language'],
+  vllm: ['language', 'embedding'],
+  textgenwebui: ['language'],
 }
 
 // Documentation links
@@ -127,6 +187,15 @@ const PROVIDER_DOCS: Record<string, string> = {
   openai_compatible: 'https://github.com/lfnovo/open-notebook/blob/main/docs/5-CONFIGURATION/openai-compatible.md',
   dashscope: 'https://help.aliyun.com/zh/model-studio/getting-started/',
   minimax: 'https://platform.minimaxi.com/document/Guides',
+  ollama: 'https://ollama.com',
+  lmstudio: 'https://lmstudio.ai',
+  jan: 'https://jan.ai',
+  gpt4all: 'https://gpt4all.io',
+  localai: 'https://localai.io',
+  llamacpp: 'https://github.com/ggerganov/llama.cpp/tree/master/examples/server',
+  koboldcpp: 'https://github.com/LostRuins/koboldcpp',
+  vllm: 'https://docs.vllm.ai',
+  textgenwebui: 'https://github.com/oobabooga/text-generation-webui',
 }
 
 const TYPE_ICONS: Record<ModelType, React.ReactNode> = {
@@ -176,7 +245,8 @@ function CredentialFormDialog({
   const isVertex = provider === 'vertex'
   const isOllama = provider === 'ollama'
   const isOpenAICompatible = provider === 'openai_compatible'
-  const requiresApiKey = !isVertex && !isOllama && !isOpenAICompatible
+  const isLocalLLM = provider in LOCAL_LLM_DEFAULTS && provider !== 'openai_compatible'
+  const requiresApiKey = !isVertex && !isOllama && !isOpenAICompatible && !isLocalLLM
 
   const [name, setName] = useState('')
   const [apiKey, setApiKey] = useState('')
@@ -201,7 +271,7 @@ function CredentialFormDialog({
       setModalities(credential.modalities || [])
     } else {
       setName('')
-      setBaseUrl('')
+      setBaseUrl(LOCAL_LLM_DEFAULTS[provider]?.baseUrl || '')
       setApiKey('')
       setProject('')
       setLocation('')
@@ -373,10 +443,19 @@ function CredentialFormDialog({
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder={isOllama ? 'http://localhost:11434' : 'https://api.example.com/v1'}
+                placeholder={LOCAL_LLM_DEFAULTS[provider]?.baseUrl || (isOllama ? 'http://localhost:11434' : 'https://api.example.com/v1')}
                 disabled={isSubmitting}
               />
-              <p className="text-xs text-muted-foreground">{t('apiKeys.baseUrlOverrideHint')}</p>
+              {isLocalLLM && LOCAL_LLM_DEFAULTS[provider]?.description && (
+                <p className="text-xs text-muted-foreground">{LOCAL_LLM_DEFAULTS[provider].description}</p>
+              )}
+              {isLocalLLM && LOCAL_LLM_DEFAULTS[provider]?.port > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Default port: <code className="bg-muted px-1 py-0.5 rounded">{LOCAL_LLM_DEFAULTS[provider].port}</code>
+                  {' '}— Make sure your local server is running
+                </p>
+              )}
+              {!isLocalLLM && <p className="text-xs text-muted-foreground">{t('apiKeys.baseUrlOverrideHint')}</p>}
             </div>
           )}
 
@@ -1369,6 +1448,10 @@ export default function ApiKeysPage() {
     })
   }, [credentialsByProvider])
 
+  // Group providers by category
+  const cloudProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p] === 'Cloud')
+  const localProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p] === 'Local')
+
   const isLoading = credentialsLoading || modelsLoading || defaultsLoading
 
   if (isLoading) {
@@ -1416,18 +1499,57 @@ export default function ApiKeysPage() {
           )}
 
           {/* Provider Cards */}
-          <div className="grid gap-4">
-            {sortedProviders.map(provider => (
-              <ProviderSection
-                key={provider}
-                provider={provider}
-                credentials={credentialsByProvider[provider] || []}
-                models={models || []}
-                defaults={defaults || null}
-                allCredentials={credentials || []}
-                encryptionReady={encryptionReady}
-              />
-            ))}
+          <div className="space-y-6">
+            {/* Cloud Providers */}
+            {cloudProviders.length > 0 && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Cloud Providers</h2>
+                  <p className="text-sm text-muted-foreground">API-based services requiring keys</p>
+                </div>
+                <div className="grid gap-4">
+                  {cloudProviders.map(provider => (
+                    <ProviderSection
+                      key={provider}
+                      provider={provider}
+                      credentials={credentialsByProvider[provider] || []}
+                      models={models || []}
+                      defaults={defaults || null}
+                      allCredentials={credentials || []}
+                      encryptionReady={encryptionReady}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Local LLMs */}
+            {localProviders.length > 0 && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                    </span>
+                    Local LLMs
+                  </h2>
+                  <p className="text-sm text-muted-foreground">Run models on your own hardware — no API keys needed</p>
+                </div>
+                <div className="grid gap-4">
+                  {localProviders.map(provider => (
+                    <ProviderSection
+                      key={provider}
+                      provider={provider}
+                      credentials={credentialsByProvider[provider] || []}
+                      models={models || []}
+                      defaults={defaults || null}
+                      allCredentials={credentials || []}
+                      encryptionReady={encryptionReady}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Help link */}

@@ -1,0 +1,4 @@
+-- Migration 17: Add category field to episode_profile and speaker_profile tables
+
+DEFINE FIELD IF NOT EXISTS category ON TABLE episode_profile TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS category ON TABLE speaker_profile TYPE option<string>;

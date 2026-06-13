@@ -13,6 +13,7 @@ class EpisodeProfileResponse(BaseModel):
     id: str
     name: str
     description: str
+    category: Optional[str] = None
     speaker_config: str
     outline_llm: Optional[str] = None
     transcript_llm: Optional[str] = None
@@ -31,6 +32,7 @@ def _profile_to_response(profile: EpisodeProfile) -> EpisodeProfileResponse:
         id=str(profile.id),
         name=profile.name,
         description=profile.description or "",
+        category=profile.category,
         speaker_config=profile.speaker_config,
         outline_llm=profile.outline_llm,
         transcript_llm=profile.transcript_llm,
@@ -82,6 +84,7 @@ async def get_episode_profile(profile_name: str):
 class EpisodeProfileCreate(BaseModel):
     name: str = Field(..., description="Unique profile name")
     description: str = Field("", description="Profile description")
+    category: Optional[str] = Field(None, description="Profile category")
     speaker_config: str = Field(..., description="Reference to speaker profile name")
     outline_llm: Optional[str] = Field(None, description="Model record ID for outline")
     transcript_llm: Optional[str] = Field(
@@ -104,6 +107,7 @@ async def create_episode_profile(profile_data: EpisodeProfileCreate):
         profile = EpisodeProfile(
             name=profile_data.name,
             description=profile_data.description,
+            category=profile_data.category,
             speaker_config=profile_data.speaker_config,
             outline_llm=profile_data.outline_llm,
             transcript_llm=profile_data.transcript_llm,
@@ -139,6 +143,7 @@ async def update_episode_profile(profile_id: str, profile_data: EpisodeProfileCr
 
         profile.name = profile_data.name
         profile.description = profile_data.description
+        profile.category = profile_data.category
         profile.speaker_config = profile_data.speaker_config
         profile.outline_llm = profile_data.outline_llm
         profile.transcript_llm = profile_data.transcript_llm
@@ -202,6 +207,7 @@ async def duplicate_episode_profile(profile_id: str):
         duplicate = EpisodeProfile(
             name=f"{original.name} - Copy",
             description=original.description,
+            category=original.category,
             speaker_config=original.speaker_config,
             outline_llm=original.outline_llm,
             transcript_llm=original.transcript_llm,

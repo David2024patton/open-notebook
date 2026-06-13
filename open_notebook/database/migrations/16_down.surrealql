@@ -1,0 +1,4 @@
+-- Rollback Migration 16: Remove notification system + avatar support
+REMOVE TABLE IF EXISTS notification;
+REMOVE FIELD IF EXISTS avatar_url ON TABLE user;
+REMOVE FIELD IF EXISTS avatar_color ON TABLE user;

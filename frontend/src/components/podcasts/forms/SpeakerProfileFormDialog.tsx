@@ -29,6 +29,18 @@ import { ModelSelector } from '@/components/common/ModelSelector'
 import type { TFunction } from 'i18next'
 import { useTranslation } from '@/lib/hooks/use-translation'
 
+const SPEAKER_CATEGORIES = [
+  'Professional',
+  'Business',
+  'Casual',
+  'Dramatic',
+  'Educational',
+  'News',
+  'Storytelling',
+  'Tech Talk',
+  'Interview',
+]
+
 const speakerConfigSchema = (t: TFunction) => z.object({
   name: z.string().min(1, t('common.nameRequired') || 'Name is required'),
   voice_id: z.string().min(1, t('podcasts.voiceIdRequired') || 'Voice ID is required'),
@@ -40,6 +52,7 @@ const speakerConfigSchema = (t: TFunction) => z.object({
 const speakerProfileSchema = (t: TFunction) => z.object({
   name: z.string().min(1, t('common.nameRequired') || 'Name is required'),
   description: z.string().optional(),
+  category: z.string().optional(),
   voice_model: z.string().min(1, t('podcasts.voiceModelRequired') || 'Voice model is required'),
   speakers: z
     .array(speakerConfigSchema(t))
@@ -79,6 +92,7 @@ export function SpeakerProfileFormDialog({
       return {
         name: initialData.name,
         description: initialData.description ?? '',
+        category: initialData.category ?? '',
         voice_model: initialData.voice_model ?? '',
         speakers: initialData.speakers?.map((speaker) => ({
           ...speaker,
@@ -90,6 +104,7 @@ export function SpeakerProfileFormDialog({
     return {
       name: '',
       description: '',
+      category: '',
       voice_model: '',
       speakers: [{ ...EMPTY_SPEAKER }],
     }
@@ -130,6 +145,7 @@ export function SpeakerProfileFormDialog({
     const payload = {
       ...values,
       description: values.description ?? '',
+      category: values.category || null,
       speakers: values.speakers.map((s) => ({
         ...s,
         voice_model: s.voice_model || null,
@@ -165,13 +181,27 @@ export function SpeakerProfileFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-2">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="name">{t('podcasts.profileName')} *</Label>
               <Input id="name" placeholder={t('podcasts.profileNamePlaceholder')} {...register('name')} />
               {errors.name ? (
                 <p className="text-xs text-red-600">{errors.name.message}</p>
               ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <select
+                id="category"
+                {...register('category')}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">None</option>
+                {SPEAKER_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2">

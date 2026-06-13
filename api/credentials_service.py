@@ -61,6 +61,15 @@ PROVIDER_ENV_CONFIG: Dict[str, dict] = {
     },
     "dashscope": {"required": ["DASHSCOPE_API_KEY"]},
     "minimax": {"required": ["MINIMAX_API_KEY"]},
+    # Local LLM providers (all use OpenAI-compatible API)
+    "lmstudio": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "jan": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "gpt4all": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "localai": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "llamacpp": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "koboldcpp": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "vllm": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
+    "textgenwebui": {"required_any": ["OPENAI_COMPATIBLE_BASE_URL"]},
 }
 
 PROVIDER_MODALITIES: Dict[str, List[str]] = {
@@ -81,6 +90,15 @@ PROVIDER_MODALITIES: Dict[str, List[str]] = {
     "openai_compatible": ["language", "embedding", "speech_to_text", "text_to_speech"],
     "dashscope": ["language"],
     "minimax": ["language"],
+    # Local LLM providers
+    "lmstudio": ["language", "embedding"],
+    "jan": ["language"],
+    "gpt4all": ["language"],
+    "localai": ["language", "embedding", "speech_to_text", "text_to_speech"],
+    "llamacpp": ["language"],
+    "koboldcpp": ["language"],
+    "vllm": ["language", "embedding"],
+    "textgenwebui": ["language"],
 }
 
 
@@ -387,6 +405,26 @@ async def test_credential(credential_id: str) -> dict:
             success, message = await _test_ollama_connection(base_url)
             return {"provider": provider, "success": success, "message": message}
 
+        # Local LLM providers all use OpenAI-compatible API
+        local_llm_providers = ["lmstudio", "jan", "gpt4all", "localai", "llamacpp", "koboldcpp", "vllm", "textgenwebui"]
+        if provider in local_llm_providers:
+            base_url = config.get("base_url")
+            api_key = config.get("api_key")
+            if not base_url:
+                # Use default base URL
+                from open_notebook.ai.key_provider import PROVIDER_CONFIG
+                base_url = PROVIDER_CONFIG.get(provider, {}).get("base_url", "")
+            if not base_url:
+                return {
+                    "provider": provider,
+                    "success": False,
+                    "message": "No base URL configured",
+                }
+            success, message = await _test_openai_compatible_connection(
+                base_url, api_key
+            )
+            return {"provider": provider, "success": success, "message": message}
+
         if provider == "openai_compatible":
             base_url = config.get("base_url")
             api_key = config.get("api_key")
@@ -580,6 +618,38 @@ async def discover_with_config(provider: str, config: dict) -> List[dict]:
                 ]
         except Exception as e:
             logger.warning(f"Failed to discover openai_compatible models: {e}")
+            return []
+
+    # Local LLM providers all use OpenAI-compatible API
+    local_llm_providers = ["lmstudio", "jan", "gpt4all", "localai", "llamacpp", "koboldcpp", "vllm", "textgenwebui"]
+    if provider in local_llm_providers:
+        if not base_url:
+            from open_notebook.ai.key_provider import PROVIDER_CONFIG
+            base_url = PROVIDER_CONFIG.get(provider, {}).get("base_url", "")
+        if not base_url:
+            return []
+        try:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    models_endpoint(base_url),
+                    headers=headers,
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return [
+                    {"name": m.get("id", ""), "provider": provider}
+                    for m in data.get("data", [])
+                    if m.get("id")
+                ]
+        except httpx.ConnectError:
+            logger.warning(f"Cannot connect to {provider} at {base_url}. Is the server running?")
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to discover {provider} models: {e}")
             return []
 
     if provider == "azure":

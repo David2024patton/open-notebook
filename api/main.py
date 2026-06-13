@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from api.auth import PasswordAuthMiddleware
+from api.auth import AuthMiddleware
 from api.routers import (
     auth,
     chat,
@@ -170,10 +170,10 @@ if CORS_IS_DEFAULT_WILDCARD:
 else:
     logger.info(f"CORS allowed origins: {CORS_ALLOWED_ORIGINS}")
 
-# Add password authentication middleware first
-# Exclude /api/auth/status and /api/config from authentication
+# Add authentication middleware first
+# Supports both single-password and multi-user modes via OPEN_NOTEBOOK_AUTH_MODE
 app.add_middleware(
-    PasswordAuthMiddleware,
+    AuthMiddleware,
     excluded_paths=[
         "/",
         "/health",
@@ -181,6 +181,8 @@ app.add_middleware(
         "/openapi.json",
         "/redoc",
         "/api/auth/status",
+        "/api/auth/login",
+        "/api/auth/register",
         "/api/config",
     ],
 )

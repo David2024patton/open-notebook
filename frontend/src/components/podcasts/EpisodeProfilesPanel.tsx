@@ -120,6 +120,11 @@ export function EpisodeProfilesPanel({
                       <CardTitle className="text-lg font-semibold">
                         {profile.name}
                       </CardTitle>
+                      {profile.category ? (
+                        <Badge variant="secondary" className="text-xs">
+                          {profile.category}
+                        </Badge>
+                      ) : null}
                       {unconfigured ? (
                         <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">
                           <AlertTriangle className="h-3 w-3 mr-1" />

@@ -1,0 +1,4 @@
+-- Migration 17 down: Remove category field from episode_profile and speaker_profile tables
+
+REMOVE FIELD IF EXISTS category ON TABLE episode_profile;
+REMOVE FIELD IF EXISTS category ON TABLE speaker_profile;

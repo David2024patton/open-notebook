@@ -1,0 +1,10 @@
+-- Migration 15 Down: Remove multi-user support
+-- Removes user table and owner field from notebook
+
+-- Remove owner field from notebook
+REMOVE FIELD IF EXISTS owner ON notebook;
+
+-- Remove user table and indexes
+REMOVE INDEX IF EXISTS idx_user_username ON user;
+REMOVE INDEX IF EXISTS idx_user_email ON user;
+REMOVE TABLE IF EXISTS user;

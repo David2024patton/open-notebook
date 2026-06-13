@@ -9,13 +9,16 @@ export function useAuth() {
   const {
     isAuthenticated,
     isLoading,
+    user,
     login,
     logout,
     checkAuth,
     checkAuthRequired,
     error,
     hasHydrated,
-    authRequired
+    authRequired,
+    register,
+    authMode
   } = useAuthStore()
 
   useEffect(() => {
@@ -53,6 +56,37 @@ export function useAuth() {
     return success
   }
 
+  const handleMultiUserLogin = async (email: string, password: string) => {
+    const success = await login(password, email)
+    if (success) {
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+      if (redirectPath) {
+        sessionStorage.removeItem('redirectAfterLogin')
+        router.push(redirectPath)
+      } else {
+        router.push('/notebooks')
+      }
+    }
+    return success
+  }
+
+  const handleRegister = async (
+    username: string,
+    password: string,
+    email?: string,
+    name?: string,
+    referralCode?: string
+  ) => {
+    const result = await register(username, password, email, name, referralCode)
+    if (result.autoApproved) {
+      const success = await login(password, email)
+      if (success) {
+        router.push('/notebooks')
+      }
+    }
+    return result
+  }
+
   const handleLogout = () => {
     logout()
     router.push('/login')
@@ -60,9 +94,12 @@ export function useAuth() {
 
   return {
     isAuthenticated,
-    isLoading: isLoading || !hasHydrated, // Treat lack of hydration as loading
+    isLoading: isLoading || !hasHydrated,
+    user,
     error,
-    login: handleLogin,
-    logout: handleLogout
+    login: authMode === 'single-password' ? handleLogin : handleMultiUserLogin,
+    register: handleRegister,
+    logout: handleLogout,
+    authMode
   }
 }

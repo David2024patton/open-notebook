@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple
 import httpx
 from loguru import logger
 
+from open_notebook.ai.key_provider import PROVIDER_CONFIG
 from open_notebook.ai.models import Model
 from open_notebook.database.repository import repo_query
 from open_notebook.domain.credential import Credential
@@ -711,6 +712,113 @@ async def discover_openai_compatible_models() -> List[DiscoveredModel]:
     return models
 
 
+async def _discover_local_llm_models(provider: str) -> List[DiscoveredModel]:
+    """
+    Generic discovery function for local LLM providers (LM Studio, Jan, GPT4All, etc.).
+    All use the OpenAI-compatible API format.
+    """
+    api_key = None
+    base_url = None
+
+    # Try to get config from Credential database first
+    try:
+        credentials = await Credential.get_by_provider(provider)
+        if credentials:
+            cred = credentials[0]
+            config = cred.to_esperanto_config()
+            api_key = config.get("api_key")
+            base_url = config.get("base_url", "").rstrip("/")
+    except Exception as e:
+        logger.warning(f"Failed to read {provider} config from Credential: {e}")
+
+    # Fall back to environment variables
+    if not base_url:
+        base_url = os.environ.get("OPENAI_COMPATIBLE_BASE_URL", "").rstrip("/")
+
+    # Use default base URL if not configured
+    if not base_url:
+        base_url = PROVIDER_CONFIG.get(provider, {}).get("base_url", "").rstrip("/")
+
+    if not base_url:
+        logger.warning(f"No base_url configured for {provider} provider")
+        return []
+
+    models = []
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            response = await client.get(
+                f"{base_url}/models",
+                headers=headers,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            for model in data.get("data", []):
+                model_id = model.get("id", "")
+                if model_id:
+                    model_type = classify_model_type(model_id, "openai")
+                    models.append(
+                        DiscoveredModel(
+                            name=model_id,
+                            provider=provider,
+                            model_type=model_type,
+                        )
+                    )
+    except httpx.ConnectError:
+        logger.warning(f"Cannot connect to {provider} at {base_url}. Is the server running?")
+    except httpx.HTTPStatusError as e:
+        logger.warning(f"Failed to discover {provider} models: HTTP {e.response.status_code}")
+    except Exception as e:
+        logger.warning(f"Failed to discover {provider} models: {e}")
+
+    return models
+
+
+async def discover_lmstudio_models() -> List[DiscoveredModel]:
+    """Discover models from LM Studio."""
+    return await _discover_local_llm_models("lmstudio")
+
+
+async def discover_jan_models() -> List[DiscoveredModel]:
+    """Discover models from Jan."""
+    return await _discover_local_llm_models("jan")
+
+
+async def discover_gpt4all_models() -> List[DiscoveredModel]:
+    """Discover models from GPT4All."""
+    return await _discover_local_llm_models("gpt4all")
+
+
+async def discover_localai_models() -> List[DiscoveredModel]:
+    """Discover models from LocalAI."""
+    return await _discover_local_llm_models("localai")
+
+
+async def discover_llamacpp_models() -> List[DiscoveredModel]:
+    """Discover models from llama.cpp server."""
+    return await _discover_local_llm_models("llamacpp")
+
+
+async def discover_koboldcpp_models() -> List[DiscoveredModel]:
+    """Discover models from KoboldCpp."""
+    return await _discover_local_llm_models("koboldcpp")
+
+
+async def discover_vllm_models() -> List[DiscoveredModel]:
+    """Discover models from vLLM."""
+    return await _discover_local_llm_models("vllm")
+
+
+async def discover_textgenwebui_models() -> List[DiscoveredModel]:
+    """Discover models from text-generation-webui."""
+    return await _discover_local_llm_models("textgenwebui")
+
+
 # =============================================================================
 # Main Discovery Functions
 # =============================================================================
@@ -734,6 +842,15 @@ PROVIDER_DISCOVERY_FUNCTIONS = {
     "minimax": discover_minimax_models,
     "azure": None,  # Azure requires credential-based discovery (different auth)
     "vertex": None,  # Vertex requires credential-based discovery (service account)
+    # Local LLM providers
+    "lmstudio": discover_lmstudio_models,
+    "jan": discover_jan_models,
+    "gpt4all": discover_gpt4all_models,
+    "localai": discover_localai_models,
+    "llamacpp": discover_llamacpp_models,
+    "koboldcpp": discover_koboldcpp_models,
+    "vllm": discover_vllm_models,
+    "textgenwebui": discover_textgenwebui_models,
 }
 
 

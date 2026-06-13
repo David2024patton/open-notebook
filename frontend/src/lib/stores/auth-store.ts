@@ -2,9 +2,26 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { getApiUrl } from '@/lib/config'
 
+interface UserInfo {
+  id: string
+  username: string
+  email?: string
+  display_name?: string
+  role: string
+  avatar_url?: string
+  avatar_color?: string
+}
+
+interface RegisterResult {
+  success: boolean
+  autoApproved: boolean
+}
+
 interface AuthState {
   isAuthenticated: boolean
   token: string | null
+  user: UserInfo | null
+  authMode: 'single-password' | 'multi-user' | null
   isLoading: boolean
   error: string | null
   lastAuthCheck: number | null
@@ -13,9 +30,12 @@ interface AuthState {
   authRequired: boolean | null
   setHasHydrated: (state: boolean) => void
   checkAuthRequired: () => Promise<boolean>
-  login: (password: string) => Promise<boolean>
+  login: (password: string, email?: string) => Promise<boolean>
+  register: (username: string, password: string, email?: string, name?: string, referralCode?: string) => Promise<RegisterResult>
   logout: () => void
   checkAuth: () => Promise<boolean>
+  updateProfile: (data: { email?: string; display_name?: string }) => Promise<boolean>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -23,6 +43,8 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       isAuthenticated: false,
       token: null,
+      user: null,
+      authMode: null,
       isLoading: false,
       error: null,
       lastAuthCheck: null,
@@ -46,8 +68,10 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const data = await response.json()
+          const authMode = data.auth_mode || 'single-password'
           const required = data.auth_enabled || false
-          set({ authRequired: required })
+          
+          set({ authRequired: required, authMode: authMode as 'single-password' | 'multi-user' })
 
           // If auth is not required, mark as authenticated
           if (!required) {
@@ -58,28 +82,63 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error('Failed to check auth status:', error)
 
-          // If it's a network error, set a more helpful error message
           if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
             set({
               error: 'Unable to connect to server. Please check if the API is running.',
-              authRequired: null  // Don't assume auth is required if we can't connect
+              authRequired: null
             })
           } else {
-            // For other errors, default to requiring auth to be safe
             set({ authRequired: true })
           }
 
-          // Re-throw the error so the UI can handle it
           throw error
         }
       },
 
-      login: async (password: string) => {
+      login: async (password: string, email?: string) => {
         set({ isLoading: true, error: null })
         try {
           const apiUrl = await getApiUrl()
+          const state = get()
 
-          // Test auth with notebooks endpoint
+          // Multi-user mode: use email/password login
+          if (state.authMode === 'multi-user') {
+            if (!email) {
+              set({ error: 'Email is required', isLoading: false })
+              return false
+            }
+
+            const response = await fetch(`${apiUrl}/api/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            })
+
+            if (response.ok) {
+              const data = await response.json()
+              set({
+                isAuthenticated: true,
+                token: data.access_token,
+                user: data.user,
+                isLoading: false,
+                lastAuthCheck: Date.now(),
+                error: null,
+              })
+              return true
+            } else {
+              const errorData = await response.json()
+              set({
+                error: errorData.detail || 'Login failed',
+                isLoading: false,
+                isAuthenticated: false,
+                token: null,
+                user: null,
+              })
+              return false
+            }
+          }
+
+          // Single-password mode: original behavior
           const response = await fetch(`${apiUrl}/api/notebooks`, {
             method: 'GET',
             headers: {
@@ -138,30 +197,149 @@ export const useAuthStore = create<AuthState>()(
           return false
         }
       },
+
+      register: async (username: string, password: string, email?: string, name?: string, referralCode?: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const state = get()
+
+          if (state.authMode !== 'multi-user') {
+            set({ error: 'Registration only available in multi-user mode', isLoading: false })
+            return { success: false, autoApproved: false }
+          }
+
+          const body: Record<string, string> = { username, password }
+          if (email) body.email = email
+          if (name) body.name = name
+          if (referralCode) body.referral_code = referralCode
+
+          const response = await fetch(`${apiUrl}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            set({ isLoading: false, error: null })
+            return {
+              success: true,
+              autoApproved: data.status === 'approved' || data.status === 'auto_approved',
+            }
+          } else {
+            const errorData = await response.json()
+            set({
+              error: errorData.detail || 'Registration failed',
+              isLoading: false,
+            })
+            return { success: false, autoApproved: false }
+          }
+        } catch (error) {
+          console.error('Registration error:', error)
+          set({
+            error: 'Network error during registration',
+            isLoading: false,
+          })
+          return { success: false, autoApproved: false }
+        }
+      },
       
       logout: () => {
         set({ 
           isAuthenticated: false, 
           token: null, 
+          user: null,
           error: null 
         })
+      },
+
+      updateProfile: async (data: { email?: string; display_name?: string }) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const state = get()
+
+          if (state.authMode !== 'multi-user' || !state.token) {
+            set({ error: 'Not authenticated', isLoading: false })
+            return false
+          }
+
+          const response = await fetch(`${apiUrl}/api/auth/me`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+          })
+
+          if (response.ok) {
+            const userData = await response.json()
+            set({ user: userData, isLoading: false, error: null })
+            return true
+          } else {
+            const errorData = await response.json()
+            set({ error: errorData.detail || 'Update failed', isLoading: false })
+            return false
+          }
+        } catch (error) {
+          console.error('Profile update error:', error)
+          set({ error: 'Network error', isLoading: false })
+          return false
+        }
+      },
+
+      changePassword: async (currentPassword: string, newPassword: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const state = get()
+
+          if (state.authMode !== 'multi-user' || !state.token) {
+            set({ error: 'Not authenticated', isLoading: false })
+            return false
+          }
+
+          const response = await fetch(`${apiUrl}/api/auth/change-password`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${state.token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              current_password: currentPassword, 
+              new_password: newPassword 
+            }),
+          })
+
+          if (response.ok) {
+            set({ isLoading: false, error: null })
+            return true
+          } else {
+            const errorData = await response.json()
+            set({ error: errorData.detail || 'Password change failed', isLoading: false })
+            return false
+          }
+        } catch (error) {
+          console.error('Password change error:', error)
+          set({ error: 'Network error', isLoading: false })
+          return false
+        }
       },
       
       checkAuth: async () => {
         const state = get()
-        const { token, lastAuthCheck, isCheckingAuth, isAuthenticated } = state
+        const { token, lastAuthCheck, isCheckingAuth, isAuthenticated, authMode } = state
 
-        // If already checking, return current auth state
         if (isCheckingAuth) {
           return isAuthenticated
         }
 
-        // If no token, not authenticated
         if (!token) {
           return false
         }
 
-        // If we checked recently (within 30 seconds) and are authenticated, skip
         const now = Date.now()
         if (isAuthenticated && lastAuthCheck && (now - lastAuthCheck) < 30000) {
           return true
@@ -172,6 +350,38 @@ export const useAuthStore = create<AuthState>()(
         try {
           const apiUrl = await getApiUrl()
 
+          // Multi-user mode: verify JWT token
+          if (authMode === 'multi-user') {
+            const response = await fetch(`${apiUrl}/api/auth/me`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              }
+            })
+            
+            if (response.ok) {
+              const userData = await response.json()
+              set({ 
+                isAuthenticated: true, 
+                user: userData,
+                lastAuthCheck: now,
+                isCheckingAuth: false 
+              })
+              return true
+            } else {
+              set({
+                isAuthenticated: false,
+                token: null,
+                user: null,
+                lastAuthCheck: null,
+                isCheckingAuth: false
+              })
+              return false
+            }
+          }
+
+          // Single-password mode: verify password works
           const response = await fetch(`${apiUrl}/api/notebooks`, {
             method: 'GET',
             headers: {
@@ -201,6 +411,7 @@ export const useAuthStore = create<AuthState>()(
           set({ 
             isAuthenticated: false, 
             token: null,
+            user: null,
             lastAuthCheck: null,
             isCheckingAuth: false 
           })
@@ -212,11 +423,13 @@ export const useAuthStore = create<AuthState>()(
       name: 'auth-storage',
       partialize: (state) => ({
         token: state.token,
-        isAuthenticated: state.isAuthenticated
+        isAuthenticated: state.isAuthenticated,
+        user: state.user,
+        authMode: state.authMode,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true)
-      }
+      },
     }
   )
 )

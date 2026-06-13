@@ -147,6 +147,11 @@ class ModelManager:
         # Normalize provider name: DB stores underscores but Esperanto expects hyphens
         provider = model.provider.replace("_", "-")
 
+        # Route local LLM providers to openai-compatible (they all use the same API format)
+        local_llm_providers = ["lmstudio", "lm-studio", "jan", "gpt4all", "localai", "llamacpp", "llama-cpp", "koboldcpp", "kobold-cpp", "vllm", "v-llm", "textgenwebui", "textgen-webui"]
+        if provider.lower() in local_llm_providers:
+            provider = "openai-compatible"
+
         # Create model based on type (Esperanto will cache the instance)
         if model.type == "language":
             return AIFactory.create_language(

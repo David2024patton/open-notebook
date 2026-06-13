@@ -35,9 +35,22 @@ import { Separator } from '@/components/ui/separator'
 import { ModelSelector } from '@/components/common/ModelSelector'
 import type { TFunction } from 'i18next'
 
+const EPISODE_CATEGORIES = [
+  'Interview',
+  'Educational',
+  'News',
+  'Storytelling',
+  'Tech Talk',
+  'Roundtable',
+  'Tutorial',
+  'Deep Dive',
+  'Business',
+]
+
 const episodeProfileSchema = (t: TFunction) => z.object({
   name: z.string().min(1, t('podcasts.nameRequired') || 'Name is required'),
   description: z.string().optional(),
+  category: z.string().optional(),
   speaker_config: z.string().min(1, t('podcasts.profileRequired') || 'Speaker profile is required'),
   outline_llm: z.string().min(1, t('podcasts.outlineModelRequired') || 'Outline model is required'),
   transcript_llm: z.string().min(1, t('podcasts.transcriptModelRequired') || 'Transcript model is required'),
@@ -78,6 +91,7 @@ export function EpisodeProfileFormDialog({
       return {
         name: initialData.name,
         description: initialData.description ?? '',
+        category: initialData.category ?? '',
         speaker_config: initialData.speaker_config,
         outline_llm: initialData.outline_llm ?? '',
         transcript_llm: initialData.transcript_llm ?? '',
@@ -90,6 +104,7 @@ export function EpisodeProfileFormDialog({
     return {
       name: '',
       description: '',
+      category: '',
       speaker_config: firstSpeaker,
       outline_llm: '',
       transcript_llm: '',
@@ -121,6 +136,7 @@ export function EpisodeProfileFormDialog({
     const payload = {
       ...values,
       description: values.description ?? '',
+      category: values.category || null,
       language: values.language || null,
     }
 
@@ -162,13 +178,27 @@ export function EpisodeProfileFormDialog({
         ) : null}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-2">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="name">{t('podcasts.profileName')} *</Label>
               <Input id="name" placeholder={t('podcasts.profileNamePlaceholder')} {...register('name')} />
               {errors.name ? (
                 <p className="text-xs text-red-600">{errors.name.message}</p>
               ) : null}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <select
+                id="category"
+                {...register('category')}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">None</option>
+                {EPISODE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2">
@@ -185,17 +215,17 @@ export function EpisodeProfileFormDialog({
                 <p className="text-xs text-red-600">{errors.num_segments.message}</p>
               ) : null}
             </div>
+          </div>
 
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="description">{t('common.description')}</Label>
-              <Textarea
-                id="description"
-                rows={3}
-                placeholder={t('podcasts.descriptionPlaceholder')}
-                {...register('description')}
-                autoComplete="off"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">{t('common.description')}</Label>
+            <Textarea
+              id="description"
+              rows={3}
+              placeholder={t('podcasts.descriptionPlaceholder')}
+              {...register('description')}
+              autoComplete="off"
+            />
           </div>
 
           <div className="space-y-4">

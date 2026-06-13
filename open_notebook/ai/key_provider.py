@@ -63,12 +63,46 @@ PROVIDER_CONFIG = {
     # URL-based providers
     "ollama": {
         "env_var": "OLLAMA_API_BASE",
+        "base_url": "http://host.docker.internal:11434",
     },
     "dashscope": {
         "env_var": "DASHSCOPE_API_KEY",
     },
     "minimax": {
         "env_var": "MINIMAX_API_KEY",
+    },
+    # Local LLM providers (all use OpenAI-compatible API)
+    "lmstudio": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:1234/v1",
+    },
+    "jan": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:1337/v1",
+    },
+    "gpt4all": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:4891/v1",
+    },
+    "localai": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:8080/v1",
+    },
+    "llamacpp": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:8080/v1",
+    },
+    "koboldcpp": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:5001/v1",
+    },
+    "vllm": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:8000/v1",
+    },
+    "textgenwebui": {
+        "env_var": "OPENAI_COMPATIBLE_BASE_URL",
+        "base_url": "http://localhost:5000/v1",
     },
 }
 
@@ -243,6 +277,43 @@ async def _provision_openai_compatible() -> bool:
     return any_set
 
 
+async def _provision_local_llm(provider: str) -> bool:
+    """
+    Set environment variables for local LLM providers from DB config.
+    All local LLM providers use the OpenAI-compatible API format.
+
+    Args:
+        provider: Local LLM provider name (lmstudio, jan, gpt4all, etc.)
+
+    Returns:
+        True if any keys were set from database
+    """
+    any_set = False
+
+    cred = await _get_default_credential(provider)
+    if not cred:
+        return False
+
+    # All local LLM providers map to OpenAI-compatible env vars
+    if cred.base_url:
+        os.environ["OPENAI_COMPATIBLE_BASE_URL"] = cred.base_url
+        logger.debug(f"Set OPENAI_COMPATIBLE_BASE_URL from {provider} Credential")
+        any_set = True
+    elif PROVIDER_CONFIG.get(provider, {}).get("base_url"):
+        # Use default base URL if none configured
+        os.environ["OPENAI_COMPATIBLE_BASE_URL"] = PROVIDER_CONFIG[provider]["base_url"]
+        logger.debug(f"Set OPENAI_COMPATIBLE_BASE_URL from default for {provider}")
+        any_set = True
+
+    # Some local LLM servers accept an API key (usually optional)
+    if cred.api_key:
+        os.environ["OPENAI_COMPATIBLE_API_KEY"] = cred.api_key.get_secret_value()
+        logger.debug(f"Set OPENAI_COMPATIBLE_API_KEY from {provider} Credential")
+        any_set = True
+
+    return any_set
+
+
 async def provision_provider_keys(provider: str) -> bool:
     """
     Provision environment variables from database for a specific provider.
@@ -276,6 +347,11 @@ async def provision_provider_keys(provider: str) -> bool:
     elif provider_lower in ("openai-compatible", "openai_compatible"):
         return await _provision_openai_compatible()
 
+    # Handle local LLM providers (they all use OpenAI-compatible API)
+    local_llm_providers = ["lmstudio", "jan", "gpt4all", "localai", "llamacpp", "koboldcpp", "vllm", "textgenwebui"]
+    if provider_lower in local_llm_providers:
+        return await _provision_local_llm(provider_lower)
+
     # Handle simple providers
     return await _provision_simple_provider(provider_lower)
 
@@ -295,7 +371,7 @@ async def provision_all_keys() -> dict[str, bool]:
     """
     results: dict[str, bool] = {}
 
-    # Simple providers
+    # Simple providers (includes local LLM providers from PROVIDER_CONFIG)
     for provider in PROVIDER_CONFIG.keys():
         results[provider] = await provision_provider_keys(provider)
 

@@ -12,6 +12,7 @@ export interface EpisodeProfile {
   id: string
   name: string
   description: string
+  category?: string | null
   speaker_config: string
   outline_llm?: string | null
   transcript_llm?: string | null
@@ -37,6 +38,7 @@ export interface SpeakerProfile {
   id: string
   name: string
   description: string
+  category?: string | null
   voice_model?: string | null
   speakers: SpeakerVoiceConfig[]
   // Legacy fields

@@ -1,0 +1,18 @@
+-- Migration 16: Notification system + avatar support
+-- Adds notification table for real-time alerts and avatar_url to user table
+
+DEFINE TABLE IF NOT EXISTS notification SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS for_user ON TABLE notification TYPE string;
+DEFINE FIELD IF NOT EXISTS from_user ON TABLE notification TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS title ON TABLE notification TYPE string;
+DEFINE FIELD IF NOT EXISTS message ON TABLE notification TYPE string;
+DEFINE FIELD IF NOT EXISTS notification_type ON TABLE notification TYPE string; -- signup, referral, role_change, system
+DEFINE FIELD IF NOT EXISTS is_read ON TABLE notification TYPE bool DEFAULT false;
+DEFINE FIELD IF NOT EXISTS link ON TABLE notification TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS created ON TABLE notification TYPE datetime DEFAULT time::now();
+DEFINE INDEX IF NOT EXISTS idx_notification_for_user ON TABLE notification FIELDS for_user;
+DEFINE INDEX IF NOT EXISTS idx_notification_is_read ON TABLE notification FIELDS is_read;
+
+-- Add avatar support to user table
+DEFINE FIELD IF NOT EXISTS avatar_url ON TABLE user TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS avatar_color ON TABLE user TYPE option<string>;

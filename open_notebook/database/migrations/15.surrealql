@@ -1,0 +1,53 @@
+-- Migration 15: Multi-user support with roles, referrals, and signup approval
+-- Creates user table, referral_code table, and signup_request table
+
+-- USER TABLE
+DEFINE TABLE user SCHEMAFULL;
+DEFINE FIELD username ON user TYPE string;
+DEFINE FIELD email ON user TYPE option<string>;
+DEFINE FIELD password_hash ON user TYPE string;
+DEFINE FIELD display_name ON user TYPE option<string>;
+DEFINE FIELD role ON user TYPE string VALUE $value OR 'user';
+DEFINE FIELD is_active ON user TYPE bool VALUE $value OR true;
+DEFINE FIELD requires_approval ON user TYPE bool VALUE $value OR false;
+DEFINE FIELD referred_by ON user TYPE option<string>;
+DEFINE FIELD created ON user TYPE option<datetime>;
+DEFINE FIELD updated ON user TYPE option<datetime>;
+
+-- Unique indexes
+DEFINE INDEX idx_user_username ON user FIELDS username UNIQUE;
+DEFINE INDEX idx_user_email ON user FIELDS email UNIQUE;
+
+-- REFERRAL CODE TABLE
+DEFINE TABLE referral_code SCHEMAFULL;
+DEFINE FIELD code ON referral_code TYPE string;
+DEFINE FIELD created_by ON referral_code TYPE string;
+DEFINE FIELD granted_role ON referral_code TYPE string;
+DEFINE FIELD is_used ON referral_code TYPE bool VALUE $value OR false;
+DEFINE FIELD used_by ON referral_code TYPE option<string>;
+DEFINE FIELD used_at ON referral_code TYPE option<datetime>;
+DEFINE FIELD created ON referral_code TYPE option<datetime>;
+DEFINE FIELD updated ON referral_code TYPE option<datetime>;
+
+-- Unique index on code
+DEFINE INDEX idx_referral_code ON referral_code FIELDS code UNIQUE;
+
+-- SIGNUP REQUEST TABLE
+DEFINE TABLE signup_request SCHEMAFULL;
+DEFINE FIELD username ON signup_request TYPE string;
+DEFINE FIELD email ON signup_request TYPE option<string>;
+DEFINE FIELD password_hash ON signup_request TYPE string;
+DEFINE FIELD display_name ON signup_request TYPE option<string>;
+DEFINE FIELD referral_code ON signup_request TYPE option<string>;
+DEFINE FIELD status ON signup_request TYPE string VALUE $value OR 'pending';
+DEFINE FIELD reviewed_by ON signup_request TYPE option<string>;
+DEFINE FIELD reviewed_at ON signup_request TYPE option<datetime>;
+DEFINE FIELD rejection_reason ON signup_request TYPE option<string>;
+DEFINE FIELD created ON signup_request TYPE option<datetime>;
+DEFINE FIELD updated ON signup_request TYPE option<datetime>;
+
+-- Index on status for quick pending lookup
+DEFINE INDEX idx_signup_status ON signup_request FIELDS status;
+
+-- NOTEBOOK TABLE - Add owner field
+DEFINE FIELD IF NOT EXISTS owner ON notebook TYPE option<record<user>>;

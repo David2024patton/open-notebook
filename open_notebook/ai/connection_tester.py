@@ -34,6 +34,15 @@ TEST_MODELS = {
     "openai_compatible": (None, "language"),  # Dynamic - will use first available model
     "dashscope": ("qwen-plus", "language"),
     "minimax": ("MiniMax-M2.5", "language"),
+    # Local LLM providers (all use OpenAI-compatible API)
+    "lmstudio": (None, "language"),
+    "jan": (None, "language"),
+    "gpt4all": (None, "language"),
+    "localai": (None, "language"),
+    "llamacpp": (None, "language"),
+    "koboldcpp": (None, "language"),
+    "vllm": (None, "language"),
+    "textgenwebui": (None, "language"),
 }
 
 

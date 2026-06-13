@@ -45,10 +45,12 @@ class EpisodeProfile(ObjectModel):
         "outline_llm",
         "transcript_llm",
         "language",
+        "category",
     }
 
     name: str = Field(..., description="Unique profile name")
     description: Optional[str] = Field(None, description="Profile description")
+    category: Optional[str] = Field(None, description="Profile category (e.g. Interview, Educational, News)")
     speaker_config: str = Field(..., description="Reference to speaker profile name")
 
     # Legacy fields (kept for migration, app ignores)
@@ -135,10 +137,12 @@ class SpeakerProfile(ObjectModel):
         "tts_provider",
         "tts_model",
         "voice_model",
+        "category",
     }
 
     name: str = Field(..., description="Unique profile name")
     description: Optional[str] = Field(None, description="Profile description")
+    category: Optional[str] = Field(None, description="Profile category (e.g. Professional, Casual, Dramatic)")
 
     # Legacy fields (kept for migration, app ignores)
     tts_provider: Optional[str] = Field(
