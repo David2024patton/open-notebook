@@ -127,9 +127,9 @@ export function ChatPanel({
     <>
     <Card className="flex flex-col h-full flex-1 overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5" />
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <Bot className="h-5 w-5 text-primary" />
             {title || (contextType === 'source' ? t('chat.chatWith').replace('{name}', t('navigation.sources')) : t('chat.chatWith').replace('{name}', t('common.notebook')))}
           </CardTitle>
           {onSelectSession && onCreateSession && onDeleteSession && (
@@ -137,7 +137,7 @@ export function ChatPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                className="gap-2"
+                className="gap-2 text-muted-foreground hover:text-foreground"
                 onClick={() => setSessionManagerOpen(true)}
                 disabled={loadingSessions}
               >
@@ -167,12 +167,12 @@ export function ChatPanel({
         <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollAreaRef}>
           <div className="space-y-4 py-4">
             {messages.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">
+              <div className="text-center text-muted-foreground py-12">
+                <Bot className="h-12 w-12 mx-auto mb-4 opacity-40" />
+                <p className="text-sm font-medium">
                   {t('chat.startConversation').replace('{type}', contextType === 'source' ? t('navigation.sources') : t('common.notebook'))}
                 </p>
-                <p className="text-xs mt-2">{t('chat.askQuestions')}</p>
+                <p className="text-xs mt-2 opacity-70">{t('chat.askQuestions')}</p>
               </div>
             ) : (
               messages.map((message) => (
@@ -180,21 +180,21 @@ export function ChatPanel({
                   key={message.id}
                   className={`flex gap-3 ${
                     message.type === 'human' ? 'justify-end' : 'justify-start'
-                  }`}
+                  } animate-fade-in`}
                 >
                   {message.type === 'ai' && (
                     <div className="flex-shrink-0">
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-4 w-4" />
+                        <Bot className="h-4 w-4 text-primary" />
                       </div>
                     </div>
                   )}
-                  <div className="flex flex-col gap-2 max-w-[80%]">
+                  <div className={`flex flex-col gap-1.5 max-w-[80%] ${message.type === 'human' ? 'items-end' : 'items-start'}`}>
                     <div
-                      className={`rounded-lg px-4 py-2 ${
+                      className={`rounded-2xl px-4 py-2.5 ${
                         message.type === 'human'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted'
+                          ? 'bg-primary text-primary-foreground rounded-br-md'
+                          : 'bg-muted rounded-bl-md'
                       }`}
                     >
                       {message.type === 'ai' ? (
@@ -203,7 +203,7 @@ export function ChatPanel({
                           onReferenceClick={handleReferenceClick}
                         />
                       ) : (
-                        <p className="text-sm break-all">{message.content}</p>
+                        <p className="text-sm leading-relaxed break-words">{message.content}</p>
                       )}
                     </div>
                     {message.type === 'ai' && (
@@ -224,14 +224,14 @@ export function ChatPanel({
               ))
             )}
             {isStreaming && (
-              <div className="flex gap-3 justify-start">
+              <div className="flex gap-3 justify-start animate-fade-in">
                 <div className="flex-shrink-0">
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Bot className="h-4 w-4" />
+                    <Bot className="h-4 w-4 text-primary" />
                   </div>
                 </div>
-                <div className="rounded-lg px-4 py-2 bg-muted">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-muted">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 </div>
               </div>
             )}
@@ -277,11 +277,11 @@ export function ChatPanel({
         )}
 
         {/* Input Area */}
-        <div className="flex-shrink-0 p-4 space-y-3 border-t">
+        <div className="flex-shrink-0 p-4 space-y-3 border-t bg-background/50 backdrop-blur-sm">
           {/* Model selector */}
           {onModelChange && (
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{t('chat.model')}</span>
+              <span className="text-xs text-muted-foreground font-medium">{t('chat.model')}</span>
               <ModelSelector
                 currentModel={modelOverride}
                 onModelChange={onModelChange}
@@ -290,7 +290,7 @@ export function ChatPanel({
             </div>
           )}
 
-          <div className="flex gap-2 items-end min-w-0">
+          <div className="flex gap-3 items-end">
             <Textarea
               id={chatInputId}
               name="chat-message"
@@ -300,14 +300,14 @@ export function ChatPanel({
               onKeyDown={handleKeyDown}
               placeholder={`${t('chat.sendPlaceholder')} (${t('chat.pressToSend').replace('{key}', keyHint)})`}
               disabled={isStreaming}
-              className="flex-1 min-h-[40px] max-h-[100px] resize-none py-2 px-3 min-w-0"
+              className="flex-1 min-h-[44px] max-h-[120px] resize-none py-3 px-4 text-sm leading-relaxed"
               rows={1}
             />
             <Button
               onClick={handleSend}
               disabled={!input.trim() || isStreaming}
               size="icon"
-              className="h-[40px] w-[40px] flex-shrink-0"
+              className="h-[44px] w-[44px] flex-shrink-0 rounded-xl"
             >
               {isStreaming ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -340,31 +340,39 @@ function AIMessageContent({
   const LinkComponent = createCompactReferenceLinkComponent(onReferenceClick)
 
   return (
-    <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none break-words prose-headings:font-semibold prose-a:text-blue-600 prose-a:break-all prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-p:mb-4 prose-p:leading-7 prose-li:mb-2">
+    <div className="prose-chat">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           a: LinkComponent,
-          p: ({ children }) => <p className="mb-4">{children}</p>,
-          h1: ({ children }) => <h1 className="mb-4 mt-6">{children}</h1>,
-          h2: ({ children }) => <h2 className="mb-3 mt-5">{children}</h2>,
-          h3: ({ children }) => <h3 className="mb-3 mt-4">{children}</h3>,
-          h4: ({ children }) => <h4 className="mb-2 mt-4">{children}</h4>,
-          h5: ({ children }) => <h5 className="mb-2 mt-3">{children}</h5>,
-          h6: ({ children }) => <h6 className="mb-2 mt-3">{children}</h6>,
+          p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+          h1: ({ children }) => <h1 className="text-lg font-semibold mt-4 mb-3 first:mt-0">{children}</h1>,
+          h2: ({ children }) => <h2 className="text-base font-semibold mt-4 mb-2 first:mt-0">{children}</h2>,
+          h3: ({ children }) => <h3 className="text-sm font-semibold mt-3 mb-2 first:mt-0">{children}</h3>,
+          h4: ({ children }) => <h4 className="text-sm font-medium mt-3 mb-1.5 first:mt-0">{children}</h4>,
+          h5: ({ children }) => <h5 className="text-sm font-medium mt-2 mb-1.5 first:mt-0">{children}</h5>,
+          h6: ({ children }) => <h6 className="text-xs font-medium mt-2 mb-1 first:mt-0">{children}</h6>,
           li: ({ children }) => <li className="mb-1">{children}</li>,
-          ul: ({ children }) => <ul className="mb-4 space-y-1">{children}</ul>,
-          ol: ({ children }) => <ol className="mb-4 space-y-1">{children}</ol>,
+          ul: ({ children }) => <ul className="mb-3 space-y-1 list-disc pl-4">{children}</ul>,
+          ol: ({ children }) => <ol className="mb-3 space-y-1 list-decimal pl-4">{children}</ol>,
           table: ({ children }) => (
-            <div className="my-4 overflow-x-auto">
-              <table className="min-w-full border-collapse border border-border">{children}</table>
+            <div className="my-3 overflow-x-auto rounded-lg border border-border">
+              <table className="min-w-full border-collapse text-xs">{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+          thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
           tbody: ({ children }) => <tbody>{children}</tbody>,
-          tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
+          tr: ({ children }) => <tr className="border-b border-border last:border-0">{children}</tr>,
           th: ({ children }) => <th className="border border-border px-3 py-2 text-left font-semibold">{children}</th>,
           td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
+          code: ({ children, className }) => {
+            const isInline = !className;
+            return isInline ? (
+              <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>
+            ) : (
+              <code className={className}>{children}</code>
+            );
+          },
         }}
       >
         {markdownWithCompactRefs}

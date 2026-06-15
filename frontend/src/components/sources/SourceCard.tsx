@@ -202,6 +202,38 @@ export function SourceCard({
   const isFailed: boolean = currentStatus === 'failed'
   const isCompleted: boolean = currentStatus === 'completed'
 
+  const retryButton = isFailed ? (
+          <div className="flex gap-2 mt-3 pt-3 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRetry}
+              disabled={!onRetry}
+              className="h-7 text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1.5" />
+              {t('sources.retry')}
+            </Button>
+          </div>
+        ) : null
+
+  const progressBar = isProcessing && statusData?.processing_info?.progress ? (
+          <div className="mt-3 pt-3 border-t">
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-xs text-muted-foreground">{t('common.progress')}</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {Math.round(statusData.processing_info.progress as number)}%
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-1.5">
+              <div
+                className="bg-primary h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${statusData.processing_info.progress as number}%` }}
+              />
+            </div>
+          </div>
+        ) : null
+
   return (
     <Card
       className={cn(
@@ -210,9 +242,9 @@ export function SourceCard({
       )}
       onClick={handleCardClick}
     >
-      <CardContent className="px-3 py-1">
+      <CardContent className="p-3">
         {/* Header with status indicator */}
-        <div className="flex items-start justify-between gap-3 mb-1">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             {/* Status badge - only show if not completed */}
             {!isCompleted && (
@@ -230,52 +262,50 @@ export function SourceCard({
                 </div>
 
                 {/* Source type indicator */}
-                <div className="flex items-center gap-1 text-gray-500">
+                <div className="flex items-center gap-1 text-muted-foreground">
                   <SourceTypeIcon className="h-3 w-3" />
-                  <span className="text-xs capitalize">{t('common.source')}</span>
+                  <span className="text-xs">{t('common.source')}</span>
                 </div>
               </div>
             )}
 
             {/* Title */}
-            <div className={cn('mb-1.5', !isCompleted && 'mb-1')}>
-              <h4
-                className="text-sm font-medium leading-tight line-clamp-2 break-all"
-                title={title}
-              >
-                {title}
-              </h4>
-            </div>
+            <h4
+              className="text-sm font-medium leading-snug line-clamp-2 break-words mb-2"
+              title={title}
+            >
+              {title}
+            </h4>
 
             {/* Processing message for active statuses */}
             {statusData?.message && (isProcessing || isFailed) && (
-              <p className="text-xs text-gray-600 mb-2 italic">
+              <p className="text-xs text-muted-foreground mb-2 italic">
                 {statusData.message}
               </p>
             )}
 
             {/* Metadata badges */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {/* Source type badge */}
-              <Badge variant="secondary" className="text-xs flex items-center gap-1">
+              <Badge variant="secondary" className="text-xs flex items-center gap-1 px-1.5 py-0.5">
                 <SourceTypeIcon className="h-3 w-3" />
                 {sourceType === 'link' ? t('sources.addUrl') : sourceType === 'upload' ? t('sources.uploadFile') : t('sources.enterText')}
               </Badge>
 
               {isCompleted && source.insights_count > 0 && (
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                   {t('sources.insightsCount').replace('{count}', source.insights_count.toString())}
                 </Badge>
               )}
               {source.topics && source.topics.length > 0 && isCompleted && (
                 <>
                   {source.topics.slice(0, 2).map((topic, index) => (
-                    <Badge key={index} variant="outline" className="text-xs">
+                    <Badge key={index} variant="outline" className="text-xs px-1.5 py-0.5">
                       {topic}
                     </Badge>
                   ))}
                   {source.topics.length > 2 && (
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       +{source.topics.length - 2}
                     </Badge>
                   )}
@@ -285,7 +315,7 @@ export function SourceCard({
           </div>
 
           {/* Context toggle and actions */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-shrink-0">
             {/* Context toggle - only show if handler provided */}
             {onContextModeChange && contextMode && (
               <ContextToggle
@@ -300,8 +330,8 @@ export function SourceCard({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  size="icon"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -355,39 +385,9 @@ export function SourceCard({
           </DropdownMenu>
           </div>
         </div>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {(isFailed as any) && (
-          <div className="flex gap-2 pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRetry}
-              disabled={!onRetry}
-              className="h-7 text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              {t('sources.retry')}
-            </Button>
-          </div>
-        )}
 
-        {/* Processing progress indicator */}
-        {isProcessing && statusData?.processing_info?.progress && (
-          <div className="mt-3 pt-2 border-t">
-            <div className="flex justify-between items-center mb-1">
-            <span className="text-xs text-gray-600">{t('common.progress')}</span>
-              <span className="text-xs text-gray-600">
-                {Math.round(statusData.processing_info.progress as number)}%
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5">
-              <div
-                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${statusData.processing_info.progress as number}%` }}
-              />
-            </div>
-          </div>
-        )}
+        {retryButton}
+        {progressBar}
       </CardContent>
     </Card>
   )

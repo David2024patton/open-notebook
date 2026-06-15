@@ -17,6 +17,7 @@ from api.routers import (
     artifacts,
     auth,
     chat,
+    chat_sessions,
     config,
     context,
     credentials,
@@ -27,18 +28,25 @@ from api.routers import (
     export,
     finance,
     flashcards,
+    hardware,
     insights,
     languages,
+    mcp,
+    modes,
     models,
     notebooks,
     notes,
     podcasts,
+    sandbox,
+    schedules,
     search,
     settings,
+    side_by_side,
     source_chat,
     sources,
     speaker_profiles,
     transformations,
+    verify,
 )
 from api.routers import commands as commands_router
 from open_notebook.database.async_migrate import AsyncMigrationManager
@@ -322,6 +330,14 @@ app.include_router(flashcards.router, prefix="/api", tags=["flashcards"])
 app.include_router(discovery.router, prefix="/api", tags=["discovery"])
 app.include_router(artifacts.router, prefix="/api", tags=["artifacts"])
 app.include_router(finance.router, prefix="/api", tags=["finance"])
+app.include_router(verify.router, prefix="/api", tags=["verify"])
+app.include_router(mcp.router, prefix="/api", tags=["mcp"])
+app.include_router(schedules.router, prefix="/api", tags=["schedules"])
+app.include_router(hardware.router, prefix="/api", tags=["hardware"])
+app.include_router(chat_sessions.router, prefix="/api", tags=["chat-sessions"])
+app.include_router(modes.router, prefix="/api", tags=["modes"])
+app.include_router(sandbox.router, prefix="/api", tags=["sandbox"])
+app.include_router(side_by_side.router, prefix="/api", tags=["side-by-side"])
 
 
 @app.get("/")

@@ -1281,7 +1281,7 @@ function DefaultModelSelectors({
         )}
 
         {/* Primary models: Chat, Embedding, TTS, STT */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2">
           {primaryConfigs.map(config => {
             const available = getModelsForType(config.modelType)
             const currentValue = watch(config.key) || undefined
@@ -1311,10 +1311,7 @@ function DefaultModelSelectors({
                     <SelectContent>
                       {available.sort((a, b) => a.name.localeCompare(b.name)).map(model => (
                         <SelectItem key={model.id} value={model.id}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{model.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">{model.provider}</span>
-                          </div>
+                          <span className="truncate">{model.name}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1331,9 +1328,9 @@ function DefaultModelSelectors({
         </div>
 
         {/* Advanced models: Transformation, Tools, Large Context */}
-        <div className="border-t pt-3">
+        <div className="border-t pt-4">
           <p className="text-xs text-muted-foreground mb-3">{t('navigation.advanced')}</p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {advancedConfigs.map(config => {
                 const available = getModelsForType(config.modelType)
                 const currentValue = watch(config.key) || undefined
@@ -1363,10 +1360,7 @@ function DefaultModelSelectors({
                         <SelectContent>
                           {available.sort((a, b) => a.name.localeCompare(b.name)).map(model => (
                             <SelectItem key={model.id} value={model.id}>
-                              <div className="flex items-center justify-between w-full">
-                                <span>{model.name}</span>
-                                <span className="text-xs text-muted-foreground ml-2">{model.provider}</span>
-                              </div>
+                              <span className="truncate">{model.name}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>

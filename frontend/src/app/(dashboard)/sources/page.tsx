@@ -300,12 +300,12 @@ export default function SourcesPage() {
             className="w-full min-w-[800px] outline-none table-fixed"
           >
             <colgroup>
-              <col className="w-[120px]" />
+              <col className="w-[100px]" />
               <col className="w-auto" />
               <col className="w-[140px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
+              <col className="w-[80px]" />
+              <col className="w-[120px]" />
+              <col className="w-[80px]" />
             </colgroup>
             <thead className="sticky top-0 bg-background z-10">
               <tr className="border-b bg-muted/50">
@@ -337,10 +337,10 @@ export default function SourcesPage() {
                 <th className="h-12 px-4 text-center align-middle font-medium text-muted-foreground hidden md:table-cell">
                   {t('sources.insights')}
                 </th>
-                <th className="h-12 px-4 text-center align-middle font-medium text-muted-foreground hidden lg:table-cell">
+                <th className="h-12 px-3 text-center align-middle font-medium text-muted-foreground hidden lg:table-cell">
                   {t('sources.embedded')}
                 </th>
-                <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">
+                <th className="h-12 px-3 text-right align-middle font-medium text-muted-foreground">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -387,12 +387,12 @@ export default function SourcesPage() {
                   <td className="h-12 px-4 text-center hidden md:table-cell">
                     <span className="text-sm font-medium">{source.insights_count || 0}</span>
                   </td>
-                  <td className="h-12 px-4 text-center hidden lg:table-cell">
+                  <td className="h-12 px-3 text-center hidden lg:table-cell">
                     <Badge variant={source.embedded ? "default" : "secondary"} className="text-xs">
                       {source.embedded ? t('sources.yes') : t('sources.no')}
                     </Badge>
                   </td>
-                  <td className="h-12 px-4 text-right">
+                  <td className="h-12 px-3 text-right">
                     <Button
                       variant="ghost"
                       size="icon"

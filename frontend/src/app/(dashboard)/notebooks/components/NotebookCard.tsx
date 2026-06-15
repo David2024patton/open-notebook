@@ -48,13 +48,13 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
         style={{ cursor: 'pointer' }}
       >
           <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <CardTitle className="text-base truncate group-hover:text-primary transition-colors">
+                <CardTitle className="text-base font-semibold truncate group-hover:text-primary transition-colors">
                   {notebook.name}
                 </CardTitle>
                 {notebook.archived && (
-                  <Badge variant="secondary" className="mt-1">
+                  <Badge variant="secondary" className="mt-1.5">
                     {t('notebooks.archived')}
                   </Badge>
                 )}
@@ -64,8 +64,8 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    size="icon"
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <MoreHorizontal className="h-4 w-4" />
@@ -100,27 +100,35 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
             </div>
           </CardHeader>
           
-          <CardContent>
-            <CardDescription className="line-clamp-2 text-sm">
+          <CardContent className="space-y-3">
+            <CardDescription className="line-clamp-2 text-sm leading-relaxed">
               {notebook.description || t('chat.noDescription')}
             </CardDescription>
 
-            <div className="mt-3 text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               {t('common.updated').replace('{time}', formatDistanceToNow(new Date(notebook.updated), { 
                 addSuffix: true,
                 locale: getDateLocale(language)
               }))}
             </div>
 
-            {/* Item counts footer */}
-            <div className="mt-3 flex items-center gap-1.5 border-t pt-3">
-              <Badge variant="outline" className="text-xs flex items-center gap-1 px-1.5 py-0.5 text-primary border-primary/50">
-                <FileText className="h-3 w-3" />
-                <span>{notebook.source_count}</span>
+            {/* Item counts footer - Proximity principle: related items grouped */}
+            <div className="flex items-center gap-2 pt-3 border-t">
+              <Badge 
+                variant="outline" 
+                className="text-xs flex items-center gap-1.5 px-2 py-1 text-primary border-primary/30 bg-primary/5"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span className="font-medium">{notebook.source_count}</span>
+                <span className="text-muted-foreground font-normal">{t('navigation.sources', { count: notebook.source_count })}</span>
               </Badge>
-              <Badge variant="outline" className="text-xs flex items-center gap-1 px-1.5 py-0.5 text-primary border-primary/50">
-                <StickyNote className="h-3 w-3" />
-                <span>{notebook.note_count}</span>
+              <Badge 
+                variant="outline" 
+                className="text-xs flex items-center gap-1.5 px-2 py-1 text-primary border-primary/30 bg-primary/5"
+              >
+                <StickyNote className="h-3.5 w-3.5" />
+                <span className="font-medium">{notebook.note_count}</span>
+                <span className="text-muted-foreground font-normal">{t('common.notes', { count: notebook.note_count })}</span>
               </Badge>
             </div>
           </CardContent>

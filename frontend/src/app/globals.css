@@ -41,73 +41,124 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM - Following Rams, Vignelli, and Swiss International Style
+   ═══════════════════════════════════════════════════════════════════════════════
+   
+   PRINCIPLES APPLIED:
+   - Dieter Rams: "Less, but better" - every element must earn its place
+   - Vignelli: Limited palette, strict grids, constraint breeds creativity
+   - Swiss Style: Mathematical precision, 8px baseline grid, clear hierarchy
+   - 60-30-10 Rule: Dominant (60%), Secondary (30%), Accent (10%)
+   
+   SPACING SYSTEM (8px baseline):
+   - 4px  (0.5) - Micro spacing: icon gaps, tight elements
+   - 8px  (1)   - Small spacing: within components
+   - 16px (2)   - Medium spacing: between related elements
+   - 24px (3)   - Large spacing: between sections
+   - 32px (4)   - XL spacing: major sections
+   - 48px (6)   - 2XL spacing: page sections
+   - 64px (8)   - 3XL spacing: hero/landing areas
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 :root {
+  /* ── Radius Scale ── */
   --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
+  
+  /* ── Light Mode Colors ── */
+  --background: oklch(0.99 0 0);           /* 60% - Dominant: clean white */
+  --foreground: oklch(0.15 0.005 285.823); /* Primary text */
+  
+  --card: oklch(1 0 0);                     /* Card surfaces */
+  --card-foreground: oklch(0.15 0.005 285.823);
+  
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.623 0.214 259.815);
-  --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.623 0.214 259.815);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.92 0.01 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+  --popover-foreground: oklch(0.15 0.005 285.823);
+  
+  /* 10% - Accent: Primary blue for CTAs */
+  --primary: oklch(0.55 0.22 260);          /* Deep blue - trustworthy */
+  --primary-foreground: oklch(0.98 0 0);
+  
+  /* 30% - Secondary: Supporting gray */
+  --secondary: oklch(0.96 0 0);             /* Light gray surface */
+  --secondary-foreground: oklch(0.22 0.005 286);
+  
+  --muted: oklch(0.96 0 0);                 /* Muted backgrounds */
+  --muted-foreground: oklch(0.55 0.015 286); /* Secondary text */
+  
+  --accent: oklch(0.96 0.005 286);          /* Hover states */
+  --accent-foreground: oklch(0.22 0.005 286);
+  
+  --destructive: oklch(0.58 0.24 27);       /* Error red */
+  
+  --border: oklch(0.91 0.004 286);          /* Subtle borders */
+  --input: oklch(0.91 0.004 286);           /* Input borders */
+  --ring: oklch(0.55 0.22 260);             /* Focus ring */
+  
+  /* Charts */
+  --chart-1: oklch(0.55 0.22 260);
+  --chart-2: oklch(0.65 0.18 185);
+  --chart-3: oklch(0.42 0.08 227);
+  --chart-4: oklch(0.78 0.16 84);
+  --chart-5: oklch(0.72 0.18 70);
+  
+  /* Sidebar */
+  --sidebar: oklch(0.98 0 0);
+  --sidebar-foreground: oklch(0.15 0.005 285.823);
+  --sidebar-primary: oklch(0.55 0.22 260);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.92 0.008 286);
+  --sidebar-accent-foreground: oklch(0.22 0.005 286);
+  --sidebar-border: oklch(0.91 0.004 286);
+  --sidebar-ring: oklch(0.55 0.22 260);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DARK MODE - OLED-friendly, reduced eye strain
+   ═══════════════════════════════════════════════════════════════════════════════ */
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.546 0.245 262.881);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
+  --background: oklch(0.12 0.005 286);       /* Deep dark - not pure black */
+  --foreground: oklch(0.98 0 0);              /* Off-white for readability */
+  
+  --card: oklch(0.18 0.005 286);              /* Elevated surface */
+  --card-foreground: oklch(0.98 0 0);
+  
+  --popover: oklch(0.18 0.005 286);
+  --popover-foreground: oklch(0.98 0 0);
+  
+  /* Accent lightened for dark backgrounds */
+  --primary: oklch(0.62 0.24 260);           /* Brighter blue */
+  --primary-foreground: oklch(0.98 0 0);
+  
+  --secondary: oklch(0.24 0.005 286);        /* Dark secondary */
+  --secondary-foreground: oklch(0.98 0 0);
+  
+  --muted: oklch(0.24 0.005 286);
+  --muted-foreground: oklch(0.68 0.012 286); /* Softer gray text */
+  
+  --accent: oklch(0.30 0.008 286);
+  --accent-foreground: oklch(0.98 0 0);
+  
+  --destructive: oklch(0.68 0.20 22);
+  
+  --border: oklch(1 0 0 / 12%);              /* Subtle white border */
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.35 0.01 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.55 0.24 260);
+  
+  --chart-1: oklch(0.55 0.24 260);
+  --chart-2: oklch(0.72 0.18 162);
+  --chart-3: oklch(0.82 0.16 70);
+  --chart-4: oklch(0.68 0.24 304);
+  --chart-5: oklch(0.70 0.22 16);
+  
+  --sidebar: oklch(0.18 0.005 286);
+  --sidebar-foreground: oklch(0.98 0 0);
+  --sidebar-primary: oklch(0.62 0.24 260);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.32 0.008 286);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
+  --sidebar-ring: oklch(0.55 0.24 260);
 }
 
 @layer base {
@@ -121,9 +172,10 @@
 
   body {
     @apply bg-background text-foreground transition-colors;
+    line-height: 1.6; /* Vignelli: generous leading for readability */
   }
 
-  /* Ensure proper theme inheritance for popovers and dropdowns */
+  /* Theme inheritance for portals */
   .dark {
     color-scheme: dark;
   }
@@ -132,40 +184,160 @@
     color-scheme: light;
   }
 
-  /* Ensure Radix UI components inherit theme properly */
   [data-radix-popper-content-wrapper] {
     @apply z-50;
   }
 
-  /* Force theme inheritance for portaled content */
   .dark [data-radix-popper-content-wrapper],
   .dark [data-overlay-container] {
     color-scheme: dark;
   }
 
-  /* Ensure sidebar gets proper theme */
-  .app-sidebar {
-    background-color: var(--sidebar);
+  /* ═══════════════════════════════════════════════════════════════════════════════
+     SIDEBAR - Clean, compact, user-friendly
+     ═══════════════════════════════════════════════════════════════════════════════ */
+  .on-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--sidebar);
+    border-right: 1px solid var(--sidebar-border);
+    transition: width 200ms ease;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .on-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 8px;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+
+  .on-sidebar-toggle {
+    padding: 6px;
+    height: auto;
     color: var(--sidebar-foreground);
-    border-color: var(--sidebar-border);
+    opacity: 0.5;
+    transition: opacity 150ms;
   }
 
-  /* Enhanced sidebar menu item hover effects */
-  .sidebar-menu-item {
-    @apply transition-all duration-200 ease-out;
+  .on-sidebar-toggle:hover {
+    opacity: 1;
   }
 
-  .sidebar-menu-item:hover {
-    @apply scale-[1.02];
-    background-color: var(--sidebar-accent) !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  .on-sidebar-create {
+    padding: 8px 12px;
   }
 
-  .dark .sidebar-menu-item:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  .on-create-btn {
+    width: 100%;
+    justify-content: center;
+    gap: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 500;
+    font-size: 13px;
+    height: 34px;
+    border-radius: 8px;
   }
 
-  /* Enhanced hover effects for cards */
+  .on-create-btn:hover {
+    opacity: 0.9;
+  }
+
+  .on-create-btn-icon {
+    width: 100%;
+    justify-content: center;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .on-create-btn-icon:hover {
+    opacity: 0.9;
+  }
+
+  .on-sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px;
+  }
+
+  .on-nav-section {
+    margin-bottom: 4px;
+  }
+
+  .on-nav-divider {
+    height: 1px;
+    background: var(--sidebar-border);
+    margin: 6px 4px;
+  }
+
+  .on-nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sidebar-foreground);
+    opacity: 0.35;
+    padding: 6px 8px 2px;
+    line-height: 1;
+  }
+
+  .on-nav-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .on-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 450;
+    color: var(--sidebar-foreground);
+    opacity: 0.7;
+    text-decoration: none;
+    transition: all 120ms ease;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .on-nav-item:hover {
+    opacity: 1;
+    background: var(--sidebar-accent);
+  }
+
+  .on-nav-item-active {
+    opacity: 1;
+    background: var(--sidebar-accent);
+    font-weight: 500;
+  }
+
+  .on-nav-item-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .on-sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--sidebar-border);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════════
+     CARDS - Rams: "Thorough down to last detail"
+     ═══════════════════════════════════════════════════════════════════════════════ */
   .card-hover {
     @apply transition-all duration-200 cursor-pointer;
   }
@@ -173,15 +345,14 @@
   .card-hover:hover {
     background-color: var(--muted) !important;
     border-color: var(--border);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   }
 
   .dark .card-hover:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   }
 
-  /* Ensure clickable cards show pointer cursor */
   .clickable-card {
     cursor: pointer !important;
   }
@@ -189,4 +360,190 @@
   .clickable-card * {
     cursor: pointer !important;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COMPONENT OVERRIDES - Applying design system consistency
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Card spacing fix - Vignelli: generous padding */
+[data-slot="card"] {
+  @apply py-6 gap-6;
+}
+
+/* Card header spacing */
+[data-slot="card-header"] {
+  @apply px-6 gap-2;
+}
+
+/* Card content spacing */
+[data-slot="card-content"] {
+  @apply px-6;
+}
+
+/* Button centering fix - proper flex alignment */
+[data-slot="button"] {
+  @apply items-center justify-center;
+}
+
+/* Badge alignment */
+[data-slot="badge"] {
+  @apply items-center inline-flex;
+}
+
+/* Input field consistency */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea,
+select {
+  @apply transition-colors duration-200;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  @apply ring-2 ring-ring/20 ring-offset-1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY - Vignelli: clear hierarchy through scale
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Display - Hero moments */
+.text-display {
+  @apply text-5xl font-light tracking-tight leading-tight;
+}
+
+/* H1 - Page titles */
+h1, .text-h1 {
+  @apply text-4xl font-bold tracking-tight;
+}
+
+/* H2 - Section headers */
+h2, .text-h2 {
+  @apply text-3xl font-semibold;
+}
+
+/* H3 - Subsection headers */
+h3, .text-h3 {
+  @apply text-2xl font-semibold;
+}
+
+/* H4 - Card titles */
+h4, .text-h4 {
+  @apply text-xl font-medium;
+}
+
+/* Body - Main content */
+.text-body {
+  @apply text-base leading-relaxed;
+}
+
+/* Caption - Secondary text */
+.text-caption {
+  @apply text-sm text-muted-foreground;
+}
+
+/* Overline - Labels */
+.text-overline {
+  @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SPACING UTILITIES - 8px baseline grid
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Section spacing - Swiss style generous whitespace */
+.section-spacing {
+  @apply py-8 px-6;
+}
+
+/* Component internal spacing */
+.component-spacing {
+  @apply p-4;
+}
+
+/* Tight spacing for related items */
+.tight-spacing {
+  @apply gap-2;
+}
+
+/* Standard spacing for siblings */
+.standard-spacing {
+  @apply gap-4;
+}
+
+/* Loose spacing for distinct groups */
+.loose-spacing {
+  @apply gap-6;
+}
+
+/* Major spacing for sections */
+.major-spacing {
+  @apply gap-8;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ANIMATION - Rams: "Long-lasting"
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SCROLLBAR - Minimal, functional
+   ═══════════════════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0);
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0 0);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FOCUS STATES - Accessibility
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.focus-ring {
+  @apply outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-2;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   PROSE STYLES - For markdown content
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.prose-chat {
+  @apply max-w-none break-words;
+  @apply text-sm leading-relaxed;
 }

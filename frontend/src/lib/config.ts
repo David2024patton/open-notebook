@@ -70,7 +70,7 @@ async function fetchConfig(): Promise<AppConfig> {
   let runtimeApiUrl: string | null = null
   try {
     if (isDev) console.log('🔧 [Config] Attempting to fetch runtime config from /config endpoint...')
-    const runtimeResponse = await fetch('/config', {
+    const runtimeResponse = await fetch(`/config?_=${Date.now()}`, {
       cache: 'no-store',
     })
     if (runtimeResponse.ok) {

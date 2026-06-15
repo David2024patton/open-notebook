@@ -109,7 +109,9 @@ async def mean_pool_embeddings(embeddings: List[List[float]]) -> List[float]:
 
 
 async def generate_embeddings(
-    texts: List[str], command_id: Optional[str] = None
+    texts: List[str],
+    content_type: Optional[str] = None,
+    command_id: Optional[str] = None,
 ) -> List[List[float]]:
     """
     Generate embeddings for multiple texts with automatic batching and retry.
@@ -118,8 +120,13 @@ async def generate_embeddings(
     provider payload limits. Each batch is retried up to EMBEDDING_MAX_RETRIES
     times on transient failures.
 
+    Prefixes are added based on content_type (for models that support it like nomic, BGE):
+    - "query": "search_query: {text}"
+    - "document": "search_document: {text}"
+
     Args:
         texts: List of text strings to embed
+        content_type: "query" or "document" for prefix selection
         command_id: Optional command ID for error logging context
 
     Returns:
@@ -131,6 +138,16 @@ async def generate_embeddings(
     """
     if not texts:
         return []
+
+    # Add prefixes based on content type for models that support it (e.g., nomic, BGE)
+    if content_type:
+        prefix_map = {
+            "query": "search_query: ",
+            "document": "search_document: ",
+        }
+        prefix = prefix_map.get(content_type, "")
+        if prefix:
+            texts = [f"{prefix}{t}" if not t.startswith(prefix) else t for t in texts]
 
     # Lazy import to avoid circular dependency
     from open_notebook.ai.models import model_manager
@@ -209,6 +226,7 @@ async def generate_embeddings(
 async def generate_embedding(
     text: str,
     content_type: Optional[ContentType] = None,
+    embed_type: Optional[str] = None,
     file_path: Optional[str] = None,
     command_id: Optional[str] = None,
 ) -> List[float]:
@@ -226,6 +244,7 @@ async def generate_embedding(
     Args:
         text: The text to embed
         content_type: Optional explicit content type for chunking
+        embed_type: "query" or "document" for prefix selection (e.g., "search_query: ")
         file_path: Optional file path for content type detection
         command_id: Optional command ID for error logging context
 
@@ -244,9 +263,9 @@ async def generate_embedding(
 
     # Check if chunking is needed
     if text_tokens <= CHUNK_SIZE:
-        # Short text - embed directly
+        # Short text - embed directly with prefix
         logger.debug(f"Embedding short text ({text_tokens} tokens) directly")
-        embeddings = await generate_embeddings([text], command_id=command_id)
+        embeddings = await generate_embeddings([text], content_type=embed_type, command_id=command_id)
         return embeddings[0]
 
     # Long text - chunk and mean pool
@@ -258,14 +277,14 @@ async def generate_embedding(
         raise ValueError("Text chunking produced no chunks")
 
     if len(chunks) == 1:
-        # Single chunk after splitting
-        embeddings = await generate_embeddings(chunks, command_id=command_id)
+        # Single chunk after splitting - add prefix
+        embeddings = await generate_embeddings(chunks, content_type=embed_type, command_id=command_id)
         return embeddings[0]
 
     logger.debug(f"Embedding {len(chunks)} chunks and mean pooling")
 
-    # Embed all chunks in batches
-    embeddings = await generate_embeddings(chunks, command_id=command_id)
+    # Embed all chunks in batches with prefixes
+    embeddings = await generate_embeddings(chunks, content_type=embed_type, command_id=command_id)
 
     # Mean pool to get single embedding
     pooled = await mean_pool_embeddings(embeddings)

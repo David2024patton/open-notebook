@@ -127,8 +127,14 @@ export const useAuthStore = create<AuthState>()(
               return true
             } else {
               const errorData = await response.json()
+              let errorMessage = 'Login failed'
+              if (typeof errorData.detail === 'string') {
+                errorMessage = errorData.detail
+              } else if (Array.isArray(errorData.detail)) {
+                errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ')
+              }
               set({
-                error: errorData.detail || 'Login failed',
+                error: errorMessage,
                 isLoading: false,
                 isAuthenticated: false,
                 token: null,
@@ -229,8 +235,14 @@ export const useAuthStore = create<AuthState>()(
             }
           } else {
             const errorData = await response.json()
+            let errorMessage = 'Registration failed'
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail
+            } else if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ')
+            }
             set({
-              error: errorData.detail || 'Registration failed',
+              error: errorMessage,
               isLoading: false,
             })
             return { success: false, autoApproved: false }
@@ -280,7 +292,13 @@ export const useAuthStore = create<AuthState>()(
             return true
           } else {
             const errorData = await response.json()
-            set({ error: errorData.detail || 'Update failed', isLoading: false })
+            let errorMessage = 'Update failed'
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail
+            } else if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ')
+            }
+            set({ error: errorMessage, isLoading: false })
             return false
           }
         } catch (error) {
@@ -318,7 +336,13 @@ export const useAuthStore = create<AuthState>()(
             return true
           } else {
             const errorData = await response.json()
-            set({ error: errorData.detail || 'Password change failed', isLoading: false })
+            let errorMessage = 'Password change failed'
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail
+            } else if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(', ')
+            }
+            set({ error: errorMessage, isLoading: false })
             return false
           }
         } catch (error) {

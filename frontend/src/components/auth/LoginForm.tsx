@@ -7,7 +7,7 @@ import { useAuthStore } from '@/lib/stores/auth-store'
 import { getConfig } from '@/lib/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { useTranslation } from '@/lib/hooks/use-translation'
 
@@ -20,6 +20,7 @@ export function LoginForm() {
   const [referralCode, setReferralCode] = useState('')
   const [isRegistering, setIsRegistering] = useState(false)
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const { login, register, isLoading, error } = useAuth()
   const { authRequired, authMode, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
@@ -147,16 +148,16 @@ export function LoginForm() {
       if (authMode === 'multi-user') {
         if (email.trim() && password.trim()) {
           try {
-            await login(password, email)
+            await login(email, password)
           } catch (error) {
             console.error('Unhandled error during login:', error)
           }
         }
       } else {
-        // Single-password mode
+        // Single-password mode (email is ignored)
         if (password.trim()) {
           try {
-            await login(password, '')
+            await login('', password)
           } catch (error) {
             console.error('Unhandled error during login:', error)
           }
@@ -250,21 +251,50 @@ export function LoginForm() {
             </div>
           )}
 
-          <div>
+          <div className="relative">
             <Input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder={t('auth.passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
               required
+              className="pr-10"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-red-600 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              {error}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-red-600 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                If you just changed your password, try{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('auth-storage')
+                    window.location.reload()
+                  }}
+                  className="underline hover:text-foreground"
+                >
+                  clearing browser data
+                </button>
+                {' '}or use an incognito window.
+              </p>
             </div>
           )}
 

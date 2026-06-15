@@ -41,7 +41,8 @@ export function useAuth() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydrated, authRequired])
 
-  const handleLogin = async (password: string) => {
+  const handleLogin = async (email: string, password: string) => {
+    // Single-password mode ignores email
     const success = await login(password)
     if (success) {
       // Check if there's a stored redirect path
@@ -79,7 +80,7 @@ export function useAuth() {
   ) => {
     const result = await register(username, password, email, name, referralCode)
     if (result.autoApproved) {
-      const success = await login(password, email)
+      const success = await login(email || '', password)
       if (success) {
         router.push('/notebooks')
       }
@@ -97,7 +98,12 @@ export function useAuth() {
     isLoading: isLoading || !hasHydrated,
     user,
     error,
-    login: authMode === 'single-password' ? handleLogin : handleMultiUserLogin,
+    login: async (email: string, password: string) => {
+      if (authMode === 'single-password') {
+        return handleLogin(email, password)
+      }
+      return handleMultiUserLogin(email, password)
+    },
     register: handleRegister,
     logout: handleLogout,
     authMode
