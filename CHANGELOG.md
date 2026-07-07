@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documented the flow-driven release process in `.github/RELEASE_PROCESS.md`, including the `ready` to `main` to stable release path, dev/stable image labels, and maintainer verification checklist (#938)
+- List view for the Notebooks page — a tile/list toggle in the header lets you switch between the visual card grid and a compact row layout (name, description, source/note counts, last updated) for easier scanning of large collections. The choice is remembered across reloads and translated across all 14 locales (#885)
+- Documented the `ESPERANTO_TTS_TIMEOUT` environment variable (default `300`s) in the environment reference; raise it for slow or self-hosted TTS providers so long podcast segments don't fail with a timeout (#937)
+- `SECURITY.md` with a coordinated-disclosure policy: how to privately report a vulnerability via GitHub's private vulnerability reporting, supported versions, and response expectations (#943)
+- LaTeX math rendering (KaTeX) now also applies to source content, source insights, Ask answers, transformation output, and the note editor preview — previously only chat had it (#269)
+- Syntax highlighting for fenced code blocks in chat responses, source content, insights and Ask/Search answers — light/dark aware, with 25 common languages bundled (others render as plain text) (#783)
+- "Recently Viewed" section on the Notebooks page — a collapsible grid of the last 12 notebooks and sources you opened, newest first, hidden when there's no view history. Backed by a new `last_viewed_at` timestamp stamped on read and a `GET /api/recently-viewed` endpoint (translated across all 14 locales) (#850)
+- Per-transformation model selection — each transformation can now be assigned its own language model from the transformation editor, overriding the global transformation default for that transformation only. Runs without an explicit model keep using the system default as before (#776)
+- "Refresh content" action on web-link sources — re-fetches the URL and re-embeds the source so its content stays current, available from the source card menu once processing has completed (translated across all 14 locales) (#259)
+
+### Changed
+- The API's listen interface in the Docker images is now configurable via a new `API_HOST` environment variable instead of a hardcoded `--host 0.0.0.0`. The default is unchanged (`0.0.0.0`); set `API_HOST=::` to serve IPv6/dual-stack environments (#985)
+- `docker-compose.yml` now sources the SurrealDB credentials from `SURREAL_USER` / `SURREAL_PASSWORD` (applied to both the database server and the app), defaulting to `root:root` so the zero-config quick start is unchanged. Set them in a `.env` file to use your own credentials before exposing the instance; `.env.example` and the compose file note this (#946)
+
+### Fixed
+- API startup no longer crashes when SurrealDB isn't ready yet (e.g. docker-compose race on host reboot: `Temporary failure in name resolution`). The lifespan now polls a lightweight readiness probe with bounded exponential backoff (~50s budget, 5s per-probe timeout) before running migrations; migration errors themselves still fail fast (#708)
+- Markdown typography styles (`prose` classes) are active again: the Tailwind v4 migration left the old `tailwind.config.ts` (which loaded `@tailwindcss/typography`) silently ignored, so rendered markdown lost its typographic styling. The plugin and class-based dark mode are now configured in `globals.css`, and markdown rendering is centralized in a shared `MarkdownRenderer` component (#783)
+- Podcast generation no longer truncates on dense, long-form content (`LengthFinishReasonError` / `OUTPUT_PARSING_FAILURE`): episode profiles now support an optional `max_tokens` that is passed through to podcast_creator's outline/transcript generation, overriding its defaults — settable via the episode profile API (UI follow-up in #991) (#639)
+- API no longer freezes for all requests while a chat waits on the LLM. Both the notebook chat (`execute_chat`) and source chat handlers ran LangGraph's synchronous `invoke()` directly on the event loop; they now run it via `asyncio.to_thread()` (matching the existing `get_state` calls), so other requests stay responsive — and the source-chat SSE can flush its early events instead of stalling until the model finishes (#704)
+- Windows native install guide no longer points users at a `start-open-notebook.bat` that doesn't exist in the repo; the Quick Start now documents starting the four services manually with `uv run`, plus an optional sample launcher you can save yourself (#846)
+- OpenRouter (and other providers') "Discover models" dialog no longer cuts off the submit button: the dialog now uses a fixed header/footer with a scrollable body (`grid-rows-[auto_1fr_auto]`) instead of scrolling the whole content, so the "Add" button stays visible regardless of how many models are listed (#816)
+- Chat references using the short `[insight:<id>]` form (emitted by some models) are now rendered as clickable citations like `[source_insight:<id>]` and `[note:<id>]` already were; `insight` is treated as an alias for `source_insight`, so clicking it opens the insight (#490)
+- CRUD endpoints now return `404` (not `500`) for a non-existent resource. `ObjectModel.get()` raises `NotFoundError` rather than returning a falsy value, so the broad `except Exception` in each handler was masking it as a server error. Added an explicit `NotFoundError → 404` arm to the notebook (update / delete / delete-preview / add-source / remove-source), note (get / update / delete / list / create), model (delete), credential (update / delete) and embed handlers (#862)
+- Token counting no longer raises `ValueError: disallowed special token '<|endoftext|>'` when source/context content contains special-token sequences; `token_count()` now encodes with `disallowed_special=()` so such substrings are treated as ordinary text (#667)
+- Single-container image no longer hangs at "API not ready yet" on a brand-new instance. `supervisord.single.conf` ran the API and worker with `uv run` (without `--no-sync`), so at startup `uv` tried to sync dev dependencies it couldn't resolve against the `--no-dev` build. Both processes now use `uv run --no-sync`, matching the multi-container `supervisord.conf` (#609)
+- Note editor now expands to fill the dialog instead of being capped at `500px`; removed the `max-h-[500px]` constraint that overrode the `flex-1` parent and cramped editing on tall windows (#932)
+
+### Security
+- Resolved dependency audit findings: added npm `overrides` for vulnerable transitive frontend packages (`ws`, `brace-expansion`, `ajv`, `@eslint/plugin-kit`, `postcss`) — `npm audit` now reports 0 vulnerabilities — refreshed `uv.lock` (`langsmith`, `pydantic-settings`, `pip`), and hardened external `window.open(..., '_blank')` calls with `noopener,noreferrer` (#962)
+
+## [1.10.0] - 2026-06-17
+
+### Security
+- Bumped **Starlette to 1.2.1** and **FastAPI to 0.136.3** to address **CVE-2026-48710** ("BadHost"), a denial-of-service in Starlette's host header handling (#859)
+
+### Added
+- LaTeX math rendering in chat — inline (`$...$`) and display (`$$...$$`) expressions are now rendered with KaTeX (#606)
+- `NEXT_PUBLIC_API_TIMEOUT_MS` environment variable to configure the frontend API request timeout (default `600000` = 10 minutes; set `0` to disable). Lets slow/long-running chat models finish without editing source (#880)
+- Bulk chat-context actions in a notebook, via a "Context" menu in the Sources and Notes column headers — translated across all 14 locales (#223):
+  - Sources: "Include all (insights only)" (sources without insights are left out rather than forced to full), "Include all (full content)", and "Exclude all from context"
+  - Notes: "Include all in context" / "Exclude all from context"
+- **Turkish (tr-TR) localization** — the UI is now fully translated into Turkish (#871)
+
+### Changed
+- Failed source cards now show a prominent "Retry processing" button directly on the card instead of only inside the 3-dot dropdown; clicking it no longer also opens the source (the click was missing `stopPropagation`) (#726)
+- Docker base image updated to **Debian trixie** and **Node.js 22.x** (#914)
+
+### Fixed
+- Podcast generation now uses the notebook's real content. `Notebook.get_context()` was missing, so generation ran against empty context; it now assembles source and note content as expected (#864)
+- `PUT` profile handlers now use `model_dump(exclude_unset=True)`, so partial updates no longer overwrite unspecified fields with defaults (#860)
+- OpenRouter embedding models are now correctly recognized via their embedding modality (#842)
+- Search and Ask results now use page-level scrolling instead of being confined to a cramped, height-capped (`60vh`) bottom container, so the full result set is readable (#882)
+- `POST /sources/{id}/retry` no longer returns `400 "Source is not associated with any notebooks"` for every source; it now queries the `reference` graph edge by its `in`/`out` columns instead of a non-existent `source` column (#861)
+- `POST /sources/{id}/retry` no longer returns a `500` ("too many values to unpack") after successfully queuing the retry job; the command ID was being double-prefixed (`command:command:…`) before being saved to the source. Retrying a failed source now succeeds and updates the source's command reference
+- `GET /sources/{id}` for a missing or deleted source now returns `404` instead of `500`; the handler caught `NotFoundError` in its generic `except` and mapped it to a server error
+- Sources that fail to ingest (e.g. an unreachable or invalid URL) are now marked `failed` instead of silently saved as `completed` with the extraction error as their body. This means the "Retry processing" button (#726) actually appears for the most common failure mode; previously the job returned a failure payload but the command still completed, so the source never reached a retryable state (#726)
+- Text search no longer returns a 500 when SurrealDB's `search::highlight` hits a "position overflow" on large or multi-byte document chunks; it now falls back to vector search and returns results (#648)
+- `POST /api/search` now rejects a non-positive `limit` with a `422` instead of passing `LIMIT -1`/`LIMIT 0` to SurrealDB (which caused a 500 or a silently empty result set) (#863)
+- Ollama `num_ctx` credential override is now persisted. The `credential` table gained a flexible `config` object (migration 15) and provider-specific tuning options are stored there instead of being dropped by the SCHEMAFULL table; future per-credential options can be added without a schema migration (#875)
+- Worker no longer crashes on queued jobs from older versions; legacy embedding command aliases (`embed_single_item`, `embed_chunk`, `vectorize_source`) are registered and delegate to the current commands so stale queues drain cleanly (#695, #876)
+
+### Performance
+- Notebook source list no longer re-renders every `SourceCard` on unrelated state changes (layout toggles, context selection), and completed sources no longer each open a status-polling query. Both scaled with the number of sources and caused UI lag on large notebooks (#503)
+
 ## [1.9.0] - 2026-06-02
 
 ### Added

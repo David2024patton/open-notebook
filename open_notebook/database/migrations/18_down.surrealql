@@ -1,0 +1,11 @@
+-- Rollback migration 18: Remove multi-user tables and notebook owner field
+
+-- Remove owner field from notebook
+REMOVE FIELD IF EXISTS owner ON TABLE notebook;
+
+-- Drop tables
+REMOVE TABLE IF EXISTS notification;
+REMOVE TABLE IF EXISTS user_totp;
+REMOVE TABLE IF EXISTS signup_request;
+REMOVE TABLE IF EXISTS referral_code;
+REMOVE TABLE IF EXISTS user;

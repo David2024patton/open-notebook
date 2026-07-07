@@ -33,9 +33,35 @@ from open_notebook.config import UPLOADS_FOLDER
 from open_notebook.database.repository import ensure_record_id, repo_query
 from open_notebook.domain.notebook import Asset, Notebook, Source
 from open_notebook.domain.transformation import Transformation
-from open_notebook.exceptions import InvalidInputError
+from open_notebook.exceptions import InvalidInputError, NotFoundError
 
 router = APIRouter()
+
+SOURCE_SORT_FIELDS = {
+    "created": "created",
+    "updated": "updated",
+    "title": "title",
+    "insights_count": "insights_count",
+    "embedded": "embedded",
+    "type": "type",
+}
+
+SOURCE_TYPE_EXPRESSION = (
+    "IF asset.file_path != NONE THEN 'file' "
+    "ELSE IF asset.url != NONE THEN 'link' ELSE 'text' END"
+)
+
+
+async def _stamp_source_view(source_id: str) -> None:
+    # Best-effort write-on-read: recording the view timestamp must never turn a
+    # successful read into a 500. Log and move on if the stamp update fails.
+    try:
+        await repo_query(
+            "UPDATE $source_id SET last_viewed_at = time::now();",
+            {"source_id": ensure_record_id(source_id)},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to stamp last_viewed_at for source {source_id}: {e}")
 
 
 def generate_unique_filename(original_filename: str, upload_folder: str) -> str:
@@ -166,16 +192,21 @@ async def get_sources(
     ),
     offset: int = Query(0, ge=0, description="Number of sources to skip"),
     sort_by: str = Query(
-        "updated", description="Field to sort by (created or updated)"
+        "updated",
+        description="Field to sort by (type, title, created, updated, insights_count, or embedded)",
     ),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
 ):
     """Get sources with pagination and sorting support."""
     try:
         # Validate sort parameters
-        if sort_by not in ["created", "updated"]:
+        if sort_by not in SOURCE_SORT_FIELDS:
             raise HTTPException(
-                status_code=400, detail="sort_by must be 'created' or 'updated'"
+                status_code=400,
+                detail=(
+                    "sort_by must be one of: type, title, created, updated, "
+                    "insights_count, embedded"
+                ),
             )
         if sort_order.lower() not in ["asc", "desc"]:
             raise HTTPException(
@@ -183,7 +214,9 @@ async def get_sources(
             )
 
         # Build ORDER BY clause
-        order_clause = f"ORDER BY {sort_by} {sort_order.upper()}"
+        order_clause = (
+            f"ORDER BY {SOURCE_SORT_FIELDS[sort_by]} {sort_order.upper()}, id ASC"
+        )
 
         # Build the query
         if notebook_id:
@@ -195,6 +228,7 @@ async def get_sources(
             # Query sources for specific notebook - include command field with FETCH
             query = f"""
                 SELECT id, asset, created, title, updated, topics, command,
+                ({SOURCE_TYPE_EXPRESSION}) AS type,
                 (SELECT VALUE count() FROM source_insight WHERE source = $parent.id GROUP ALL)[0].count OR 0 AS insights_count,
                 (SELECT VALUE id FROM source_embedding WHERE source = $parent.id LIMIT 1) != [] AS embedded
                 FROM (select value in from reference where out=$notebook_id)
@@ -214,6 +248,7 @@ async def get_sources(
             # Query all sources - include command field with FETCH
             query = f"""
                 SELECT id, asset, created, title, updated, topics, command,
+                ({SOURCE_TYPE_EXPRESSION}) AS type,
                 (SELECT VALUE count() FROM source_insight WHERE source = $parent.id GROUP ALL)[0].count OR 0 AS insights_count,
                 (SELECT VALUE id FROM source_embedding WHERE source = $parent.id LIMIT 1) != [] AS embedded
                 FROM source
@@ -632,6 +667,8 @@ async def get_source(source_id: str):
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
+        await _stamp_source_view(source.id or source_id)
+
         # Get status information if command exists
         status = None
         processing_info = None
@@ -679,6 +716,8 @@ async def get_source(source_id: str):
         )
     except HTTPException:
         raise
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Source not found")
     except Exception as e:
         logger.error(f"Error fetching source {source_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching source: {str(e)}")
@@ -842,10 +881,15 @@ async def retry_source_processing(source_id: str):
                 )
                 # Continue with retry if we can't check status
 
-        # Get notebooks that this source belongs to
-        query = "SELECT notebook FROM reference WHERE source = $source_id"
-        references = await repo_query(query, {"source_id": source_id})
-        notebook_ids = [str(ref["notebook"]) for ref in references]
+        # Get notebooks that this source belongs to. `reference` is a graph edge
+        # (RELATE source->reference->notebook), so it only has `in`/`out` columns —
+        # there is no `source`/`notebook` column. Mirror the working query at the
+        # source-list path above. See issue #861.
+        references = await repo_query(
+            "SELECT VALUE out FROM reference WHERE in = $source_id",
+            {"source_id": ensure_record_id(source.id or source_id)},
+        )
+        notebook_ids = [str(nb_id) for nb_id in references] if references else []
 
         if not notebook_ids:
             raise HTTPException(
@@ -899,7 +943,8 @@ async def retry_source_processing(source_id: str):
             )
 
             # Update source with new command ID
-            source.command = ensure_record_id(f"command:{command_id}")
+            # command_id already includes 'command:' prefix
+            source.command = ensure_record_id(command_id)
             await source.save()
 
             # Get current embedded chunks count

@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { MarkdownRenderer } from '@/components/ui/markdown-renderer'
 import { sourcesApi } from '@/lib/api/sources'
 import { insightsApi, SourceInsightResponse } from '@/lib/api/insights'
 import { transformationsApi } from '@/lib/api/transformations'
@@ -73,6 +72,17 @@ interface SourceDetailContentProps {
   showChatButton?: boolean
   onChatClick?: () => void
   onClose?: () => void
+}
+
+const safeExternalHref = (url: string | null | undefined): string | null => {
+  if (!url) return null
+
+  try {
+    const parsedUrl = new URL(url)
+    return ['http:', 'https:'].includes(parsedUrl.protocol) ? parsedUrl.href : null
+  } catch {
+    return null
+  }
 }
 
 export function SourceDetailContent({
@@ -316,6 +326,8 @@ export function SourceDetailContent({
     return 'text'
   }
 
+  const externalHref = useMemo(() => safeExternalHref(source?.asset?.url), [source?.asset?.url])
+
   const handleCopyUrl = useCallback(() => {
     if (source?.asset?.url) {
       navigator.clipboard.writeText(source.asset.url)
@@ -326,10 +338,10 @@ export function SourceDetailContent({
   }, [source, t])
 
   const handleOpenExternal = useCallback(() => {
-    if (source?.asset?.url) {
-      window.open(source.asset.url, '_blank')
+    if (externalHref) {
+      window.open(externalHref, '_blank', 'noopener,noreferrer')
     }
-  }, [source])
+  }, [externalHref])
 
   const getYouTubeVideoId = (url: string): string | null => {
     const patterns = [
@@ -345,14 +357,14 @@ export function SourceDetailContent({
   }
 
   const isYouTubeUrl = useMemo(() => {
-    if (!source?.asset?.url) return false
-    return !!(getYouTubeVideoId(source.asset.url))
-  }, [source?.asset?.url])
+    if (!externalHref) return false
+    return !!(getYouTubeVideoId(externalHref))
+  }, [externalHref])
 
   const youTubeVideoId = useMemo(() => {
-    if (!source?.asset?.url) return null
-    return getYouTubeVideoId(source.asset.url)
-  }, [source?.asset?.url])
+    if (!externalHref) return null
+    return getYouTubeVideoId(externalHref)
+  }, [externalHref])
 
   const handleDelete = async () => {
     if (!source) return
@@ -479,16 +491,16 @@ export function SourceDetailContent({
                   {isYouTubeUrl && <Youtube className="h-5 w-5" />}
                   {t('sources.content')}
                 </CardTitle>
-                {source.asset?.url && !isYouTubeUrl && (
+                {externalHref && !isYouTubeUrl && (
                   <CardDescription className="flex items-center gap-2">
                     <LinkIcon className="h-4 w-4" />
                     <a
-                      href={source.asset.url}
+                      href={externalHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="hover:underline text-blue-600"
                     >
-                      {source.asset.url}
+                      {source.asset?.url}
                     </a>
                   </CardDescription>
                 )}
@@ -505,10 +517,10 @@ export function SourceDetailContent({
                         allowFullScreen
                       />
                     </div>
-                    {source.asset?.url && (
+                    {externalHref && (
                       <div className="mt-2">
                         <a
-                          href={source.asset.url}
+                          href={externalHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-muted-foreground hover:underline inline-flex items-center gap-1"
@@ -520,32 +532,9 @@ export function SourceDetailContent({
                     )}
                   </div>
                 )}
-                <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-blue-600 prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-p:mb-4 prose-p:leading-7 prose-li:mb-2">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ children }) => <p className="mb-4">{children}</p>,
-                      h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-4">{children}</h1>,
-                      h2: ({ children }) => <h2 className="text-xl font-bold mt-5 mb-3">{children}</h2>,
-                      h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2">{children}</h3>,
-                      ul: ({ children }) => <ul className="mb-4 list-disc pl-6">{children}</ul>,
-                      ol: ({ children }) => <ol className="mb-4 list-decimal pl-6">{children}</ol>,
-                      li: ({ children }) => <li className="mb-1">{children}</li>,
-                      table: ({ children }) => (
-                        <div className="my-4 overflow-x-auto">
-                          <table className="min-w-full border-collapse border border-border">{children}</table>
-                        </div>
-                      ),
-                      thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
-                      tbody: ({ children }) => <tbody>{children}</tbody>,
-                      tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
-                      th: ({ children }) => <th className="border border-border px-3 py-2 text-left font-semibold">{children}</th>,
-                      td: ({ children }) => <td className="border border-border px-3 py-2">{children}</td>,
-                    }}
-                  >
-                    {source.full_text || t('sources.noContent')}
-                  </ReactMarkdown>
-                </div>
+                <MarkdownRenderer>
+                  {source.full_text || t('sources.noContent')}
+                </MarkdownRenderer>
               </CardContent>
             </Card>
           </TabsContent>
@@ -711,6 +700,7 @@ export function SourceDetailContent({
                           size="sm"
                           variant="outline"
                           onClick={handleOpenExternal}
+                          disabled={!externalHref}
                         >
                           <ExternalLink className="h-4 w-4" />
                         </Button>

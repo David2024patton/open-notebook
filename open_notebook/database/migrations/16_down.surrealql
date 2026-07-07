@@ -1,4 +1,3 @@
--- Rollback Migration 16: Remove notification system + avatar support
-REMOVE TABLE IF EXISTS notification;
-REMOVE FIELD IF EXISTS avatar_url ON TABLE user;
-REMOVE FIELD IF EXISTS avatar_color ON TABLE user;
+-- Migration 16 rollback: Remove max_tokens field from episode_profile.
+
+REMOVE FIELD IF EXISTS max_tokens ON TABLE episode_profile;

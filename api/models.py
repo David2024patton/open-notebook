@@ -28,11 +28,18 @@ class NotebookResponse(BaseModel):
     note_count: int
 
 
+class RecentlyViewedResponse(BaseModel):
+    type: Literal["notebook", "source"]
+    id: str
+    title: str
+    last_viewed_at: str
+
+
 # Search models
 class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query")
     type: Literal["text", "vector"] = Field("text", description="Search type")
-    limit: int = Field(100, description="Maximum number of results", le=1000)
+    limit: int = Field(100, description="Maximum number of results", ge=1, le=1000)
     search_sources: bool = Field(True, description="Include sources in search")
     search_notes: bool = Field(True, description="Include notes in search")
     minimum_score: float = Field(
@@ -112,6 +119,9 @@ class TransformationCreate(BaseModel):
     apply_default: bool = Field(
         False, description="Whether to apply this transformation by default"
     )
+    model_id: Optional[str] = Field(
+        None, description="Model ID to use by default for this transformation"
+    )
 
 
 class TransformationUpdate(BaseModel):
@@ -126,6 +136,9 @@ class TransformationUpdate(BaseModel):
     apply_default: Optional[bool] = Field(
         None, description="Whether to apply this transformation by default"
     )
+    model_id: Optional[str] = Field(
+        None, description="Model ID to use by default for this transformation"
+    )
 
 
 class TransformationResponse(BaseModel):
@@ -135,6 +148,7 @@ class TransformationResponse(BaseModel):
     description: str
     prompt: str
     apply_default: bool
+    model_id: Optional[str] = None
     created: str
     updated: str
 
@@ -146,7 +160,9 @@ class TransformationExecuteRequest(BaseModel):
         ..., description="ID of the transformation to execute"
     )
     input_text: str = Field(..., description="Text to transform")
-    model_id: str = Field(..., description="Model ID to use for the transformation")
+    model_id: Optional[str] = Field(
+        None, description="Model ID to use for this transformation run"
+    )
 
 
 class TransformationExecuteResponse(BaseModel):
@@ -154,7 +170,7 @@ class TransformationExecuteResponse(BaseModel):
 
     output: str = Field(..., description="Transformed text")
     transformation_id: str = Field(..., description="ID of the transformation used")
-    model_id: str = Field(..., description="Model ID used")
+    model_id: Optional[str] = Field(None, description="Model ID used")
 
 
 # Default Prompt API models
@@ -447,12 +463,8 @@ class SetApiKeyRequest(BaseModel):
     base_url: Optional[str] = Field(
         None, description="Base URL for URL-based providers (Ollama, OpenAI-compatible)"
     )
-    endpoint: Optional[str] = Field(
-        None, description="Endpoint URL for Azure OpenAI"
-    )
-    api_version: Optional[str] = Field(
-        None, description="API version for Azure OpenAI"
-    )
+    endpoint: Optional[str] = Field(None, description="Endpoint URL for Azure OpenAI")
+    api_version: Optional[str] = Field(None, description="API version for Azure OpenAI")
     endpoint_llm: Optional[str] = Field(
         None, description="Service-specific endpoint for LLM (Azure)"
     )

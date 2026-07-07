@@ -628,7 +628,7 @@ function DiscoverModelsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[85vh] grid-rows-[auto_1fr_auto]">
         <DialogHeader>
           <DialogTitle>
             {t('models.discoverModels')} - {PROVIDER_DISPLAY_NAMES[credential.provider] || credential.provider}
@@ -638,6 +638,7 @@ function DiscoverModelsDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto">
         {discoverModels.isPending ? (
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner size="lg" />
@@ -690,7 +691,7 @@ function DiscoverModelsDialog({
             )}
 
             {/* Model list */}
-            <div className="space-y-1 max-h-60 overflow-y-auto">
+            <div className="space-y-1">
               {filteredModels.map((model) => (
                 <label
                   key={model.name}
@@ -731,6 +732,7 @@ function DiscoverModelsDialog({
             </div>
           </div>
         )}
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

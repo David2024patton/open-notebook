@@ -1,0 +1,1 @@
+﻿{"method":"query","params":["SELECT username, role, email FROM user;"],"id":1}

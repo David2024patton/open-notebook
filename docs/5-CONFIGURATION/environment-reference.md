@@ -14,6 +14,7 @@ Comprehensive list of all environment variables available in Open Notebook.
 | `OPEN_NOTEBOOK_PASSWORD` | No | None | Password to protect Open Notebook instance |
 | `OPEN_NOTEBOOK_ENCRYPTION_KEY` | **Yes** | None | Secret string to encrypt credentials stored in database (any string works). **Required** for the credential system. Supports Docker secrets via `_FILE` suffix. |
 | `HOSTNAME` | No | `0.0.0.0` (in Docker) | Network interface for Next.js to bind to. Default `0.0.0.0` ensures accessibility from reverse proxies |
+| `API_HOST` | No | `0.0.0.0` (in Docker) | Network interface for the API (uvicorn) to bind to. Set to `::` for IPv6 dual-stack environments (listens on IPv6 and, on Linux defaults, IPv4 too) |
 
 > **Important**: `OPEN_NOTEBOOK_ENCRYPTION_KEY` is required for storing AI provider credentials via the Settings UI. Without it, you cannot save credentials. If you change or lose this key, all stored credentials become unreadable.
 
@@ -94,6 +95,7 @@ CORS_ORIGINS=https://notebook.example.com
 | Variable | Required? | Default | Description |
 |----------|-----------|---------|-------------|
 | `TTS_BATCH_SIZE` | No | 5 | Concurrent TTS requests (1-5, depends on provider) |
+| `ESPERANTO_TTS_TIMEOUT` | No | 300 | Text-to-speech request timeout in seconds (passed through to Esperanto). Increase it for slow or self-hosted TTS providers that take longer than 5 minutes to synthesize a segment, otherwise long podcast segments can fail with a timeout. |
 
 ---
 

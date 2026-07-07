@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, memo } from 'react'
 import { SourceListResponse } from '@/lib/types/api'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -36,6 +36,7 @@ interface SourceCardProps {
   source: SourceListResponse
   onDelete?: (sourceId: string) => void
   onRetry?: (sourceId: string) => void
+  onRefreshContent?: (sourceId: string) => void
   onRemoveFromNotebook?: (sourceId: string) => void
   onClick?: (sourceId: string) => void
   onRefresh?: () => void
@@ -107,11 +108,12 @@ function getSourceType(source: SourceListResponse): 'link' | 'upload' | 'text' {
   return 'text'
 }
 
-export function SourceCard({
+function SourceCardImpl({
   source,
   onClick,
   onDelete,
   onRetry,
+  onRefreshContent,
   onRemoveFromNotebook,
   onRefresh,
   className,
@@ -128,10 +130,20 @@ export function SourceCard({
   // Track processing state to continue polling until we detect completion
   const [wasProcessing, setWasProcessing] = useState(false)
 
-  const shouldFetchStatus = !!sourceWithStatus.command_id ||
+  // Only poll status while the source is actually being processed (or just finished
+  // and we still need one more poll to catch completion). The list endpoint already
+  // populates `status` alongside `command_id`, so we no longer poll for every
+  // completed source — that scaled linearly with the number of cards and caused the
+  // list lag reported in #503.
+  //
+  // A source with a `command_id` but no resolved `status` yet is still ambiguous
+  // (it renders as a synthetic "new"), so keep polling those until a real status
+  // arrives — otherwise such a card would be stuck "processing" forever.
+  const shouldFetchStatus =
     sourceWithStatus.status === 'new' ||
     sourceWithStatus.status === 'queued' ||
     sourceWithStatus.status === 'running' ||
+    (!!sourceWithStatus.command_id && !sourceWithStatus.status) ||
     wasProcessing // Keep polling if we were processing to catch the completion
 
   const { data: statusData, isLoading: statusLoading } = useSourceStatus(
@@ -180,6 +192,12 @@ export function SourceCard({
     }
   }
 
+  const handleRefreshContent = () => {
+    if (onRefreshContent) {
+      onRefreshContent(source.id)
+    }
+  }
+
   const handleDelete = () => {
     if (onDelete) {
       onDelete(source.id)
@@ -202,38 +220,6 @@ export function SourceCard({
   const isFailed: boolean = currentStatus === 'failed'
   const isCompleted: boolean = currentStatus === 'completed'
 
-  const retryButton = isFailed ? (
-          <div className="flex gap-2 mt-3 pt-3 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRetry}
-              disabled={!onRetry}
-              className="h-7 text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1.5" />
-              {t('sources.retry')}
-            </Button>
-          </div>
-        ) : null
-
-  const progressBar = isProcessing && statusData?.processing_info?.progress ? (
-          <div className="mt-3 pt-3 border-t">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-xs text-muted-foreground">{t('common.progress')}</span>
-              <span className="text-xs font-medium text-muted-foreground">
-                {Math.round(statusData.processing_info.progress as number)}%
-              </span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-1.5">
-              <div
-                className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                style={{ width: `${statusData.processing_info.progress as number}%` }}
-              />
-            </div>
-          </div>
-        ) : null
-
   return (
     <Card
       className={cn(
@@ -242,9 +228,9 @@ export function SourceCard({
       )}
       onClick={handleCardClick}
     >
-      <CardContent className="p-3">
+      <CardContent className="px-3 py-1">
         {/* Header with status indicator */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-3 mb-1">
           <div className="flex-1 min-w-0">
             {/* Status badge - only show if not completed */}
             {!isCompleted && (
@@ -262,50 +248,52 @@ export function SourceCard({
                 </div>
 
                 {/* Source type indicator */}
-                <div className="flex items-center gap-1 text-muted-foreground">
+                <div className="flex items-center gap-1 text-gray-500">
                   <SourceTypeIcon className="h-3 w-3" />
-                  <span className="text-xs">{t('common.source')}</span>
+                  <span className="text-xs capitalize">{t('common.source')}</span>
                 </div>
               </div>
             )}
 
             {/* Title */}
-            <h4
-              className="text-sm font-medium leading-snug line-clamp-2 break-words mb-2"
-              title={title}
-            >
-              {title}
-            </h4>
+            <div className={cn('mb-1.5', !isCompleted && 'mb-1')}>
+              <h4
+                className="text-sm font-medium leading-tight line-clamp-2 break-all"
+                title={title}
+              >
+                {title}
+              </h4>
+            </div>
 
             {/* Processing message for active statuses */}
             {statusData?.message && (isProcessing || isFailed) && (
-              <p className="text-xs text-muted-foreground mb-2 italic">
+              <p className="text-xs text-gray-600 mb-2 italic">
                 {statusData.message}
               </p>
             )}
 
             {/* Metadata badges */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Source type badge */}
-              <Badge variant="secondary" className="text-xs flex items-center gap-1 px-1.5 py-0.5">
+              <Badge variant="secondary" className="text-xs flex items-center gap-1">
                 <SourceTypeIcon className="h-3 w-3" />
                 {sourceType === 'link' ? t('sources.addUrl') : sourceType === 'upload' ? t('sources.uploadFile') : t('sources.enterText')}
               </Badge>
 
               {isCompleted && source.insights_count > 0 && (
-                <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                <Badge variant="outline" className="text-xs">
                   {t('sources.insightsCount').replace('{count}', source.insights_count.toString())}
                 </Badge>
               )}
               {source.topics && source.topics.length > 0 && isCompleted && (
                 <>
                   {source.topics.slice(0, 2).map((topic, index) => (
-                    <Badge key={index} variant="outline" className="text-xs px-1.5 py-0.5">
+                    <Badge key={index} variant="outline" className="text-xs">
                       {topic}
                     </Badge>
                   ))}
                   {source.topics.length > 2 && (
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                    <Badge variant="outline" className="text-xs">
                       +{source.topics.length - 2}
                     </Badge>
                   )}
@@ -315,7 +303,7 @@ export function SourceCard({
           </div>
 
           {/* Context toggle and actions */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1">
             {/* Context toggle - only show if handler provided */}
             {onContextModeChange && contextMode && (
               <ContextToggle
@@ -330,8 +318,8 @@ export function SourceCard({
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  size="sm"
+                  className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreVertical className="h-4 w-4" />
@@ -370,6 +358,21 @@ export function SourceCard({
                 </>
               )}
 
+              {sourceType === 'link' && isCompleted && onRefreshContent && (
+                <>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleRefreshContent()
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {t('sources.refreshContent')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation()
@@ -385,10 +388,86 @@ export function SourceCard({
           </DropdownMenu>
           </div>
         </div>
+        {/* Prominent retry action surfaced directly on failed cards so it's
+            discoverable without opening the dropdown menu (#726). */}
+        {isFailed ? (
+          <div className="flex gap-2 pt-2 border-t">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleRetry()
+              }}
+              disabled={!onRetry}
+              className="h-7 text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              {t('sources.retryProcessing')}
+            </Button>
+          </div>
+        ) : null}
 
-        {retryButton}
-        {progressBar}
+        {/* Processing progress indicator */}
+        {isProcessing && typeof statusData?.processing_info?.progress === 'number' && (
+          <div className="mt-3 pt-2 border-t">
+            <div className="flex justify-between items-center mb-1">
+            <span className="text-xs text-gray-600">{t('common.progress')}</span>
+              <span className="text-xs text-gray-600">
+                {Math.round(statusData.processing_info.progress as number)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div
+                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${statusData.processing_info.progress as number}%` }}
+              />
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
+
+/**
+ * SourceCard is rendered in long lists (one per source). Without memoization, any
+ * parent re-render (layout toggles, context-selection changes elsewhere) re-rendered
+ * every card, causing UI jank that scaled with the number of sources (#503).
+ *
+ * We compare only the props that affect this card's rendered output. Handler identity
+ * is intentionally ignored: callers often pass inline closures, and those closures
+ * capture the source id, so a stale closure stays correct as long as the source data
+ * below is unchanged.
+ */
+function topicsEqual(a?: string[], b?: string[]): boolean {
+  if (a === b) return true
+  if ((a?.length ?? 0) !== (b?.length ?? 0)) return false
+  if (!a || !b) return true // both empty/undefined (lengths matched above)
+  return a.every((topic, i) => topic === b[i])
+}
+
+function areEqual(prev: SourceCardProps, next: SourceCardProps): boolean {
+  if (prev === next) return true
+
+  const p = prev.source as SourceListResponse & { command_id?: string; status?: string }
+  const n = next.source as SourceListResponse & { command_id?: string; status?: string }
+
+  return (
+    p.id === n.id &&
+    p.title === n.title &&
+    p.updated === n.updated &&
+    p.status === n.status &&
+    p.command_id === n.command_id &&
+    p.embedded === n.embedded &&
+    p.insights_count === n.insights_count &&
+    p.asset?.url === n.asset?.url &&
+    p.asset?.file_path === n.asset?.file_path &&
+    topicsEqual(p.topics, n.topics) &&
+    prev.contextMode === next.contextMode &&
+    prev.showRemoveFromNotebook === next.showRemoveFromNotebook &&
+    prev.className === next.className
+  )
+}
+
+export const SourceCard = memo(SourceCardImpl, areEqual)
