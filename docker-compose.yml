@@ -49,6 +49,10 @@ services:
       - OPEN_NOTEBOOK_AUTH_MODE=multi-user
       - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
 
+      # DIAGNOSTIC (temporary): skip startup migrations so a broken migration 23
+      # can't crash the worker; re-enable once the worker is confirmed up.
+      - OPEN_NOTEBOOK_SKIP_MIGRATIONS=1
+
       # SSH access (optional). Override SSH_PASSWORD in .env for production.
       - SSH_USER=${SSH_USER:-notebook}
       - SSH_PASSWORD=${SSH_PASSWORD:-notebook}
@@ -86,7 +90,10 @@ services:
       # LLM setups to avoid overloading the model with parallel requests.
       # - OPEN_NOTEBOOK_WORKER_MAX_TASKS=1
     volumes:
-      - ./notebook_data:/app/data
+      # Point at a fresh host dir so Docker creates a clean writable mount
+      # (the old ./notebook_data bind source got into a bad state on the host,
+      # making /app/data unwritable and crashing `uv run` at startup).
+      - ./notebook_data_v2:/app/data
       # Optional: mount your SSH public key for key-based auth
       # Create a file named authorized_keys with your pubkey, then uncomment:
       # - ./authorized_keys:/app/ssh/authorized_keys:ro
