@@ -63,7 +63,14 @@ from api.routers import (
 )
 from api.routers import commands as commands_router
 from open_notebook.database.async_migrate import AsyncMigrationManager
-from open_notebook.database.repository import current_jwt, current_owner_id
+# DIAGNOSTIC (temporary): repository.py was reverted to pre-Phase2.5 (no
+# current_jwt/current_owner_id); define local stubs so the disabled bridge
+# still imports. Remove when Phase 2.5 repository changes are restored.
+from contextlib import contextmanager  # noqa
+from contextvars import ContextVar as _ContextVar
+
+current_jwt = _ContextVar("current_jwt", default=None)
+current_owner_id = _ContextVar("current_owner_id", default=None)
 from open_notebook.exceptions import (
     AuthenticationError,
     ConfigurationError,
