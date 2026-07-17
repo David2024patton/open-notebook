@@ -46,6 +46,9 @@ services:
       - OPEN_NOTEBOOK_AUTH_MODE=multi-user
       - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
 
+      # DIAGNOSTIC (temporary): skip startup migrations to isolate worker crash
+      - OPEN_NOTEBOOK_SKIP_MIGRATIONS=1
+
       # SSH access (optional). Override SSH_PASSWORD in .env for production.
       - SSH_USER=${SSH_USER:-notebook}
       - SSH_PASSWORD=${SSH_PASSWORD:-notebook}

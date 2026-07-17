@@ -242,6 +242,10 @@ class AsyncMigrationManager:
 
     async def run_migration_up(self):
         """Run all pending migrations."""
+        # DIAGNOSTIC (temporary): skip migrations to isolate worker crash.
+        if os.environ.get("OPEN_NOTEBOOK_SKIP_MIGRATIONS"):
+            logger.warning("SKIPPING migrations (OPEN_NOTEBOOK_SKIP_MIGRATIONS set)")
+            return
         current_version = await self.get_current_version()
         logger.info(f"Current version before migration: {current_version}")
 
