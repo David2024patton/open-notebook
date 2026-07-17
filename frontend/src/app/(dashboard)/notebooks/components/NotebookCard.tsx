@@ -105,11 +105,11 @@ export function NotebookCard({ notebook }: NotebookCardProps) {
               {notebook.description || t('chat.noDescription')}
             </CardDescription>
 
-            <div className="text-xs text-muted-foreground">
-              {t('common.updated').replace('{time}', formatDistanceToNow(new Date(notebook.updated), { 
+            <div className="mt-3 text-xs text-muted-foreground">
+              {t('common.updated', { time: formatDistanceToNow(new Date(notebook.updated), {
                 addSuffix: true,
                 locale: getDateLocale(language)
-              }))}
+              }) })}
             </div>
 
             {/* Item counts footer - Proximity principle: related items grouped */}

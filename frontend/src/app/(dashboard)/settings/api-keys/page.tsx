@@ -1,57 +1,16 @@
 'use client'
 
-import { useMemo, useState, useEffect, useId } from 'react'
-import { useForm } from 'react-hook-form'
+import { useMemo } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  RefreshCw,
-  Key,
-  ShieldAlert,
-  AlertTriangle,
-  Plus,
-  Edit,
-  Trash2,
-  Plug,
-  Loader2,
-  Check,
-  X,
-  AlertCircle,
-  Wand2,
-  MessageSquare,
-  Code,
-  Mic,
-  Volume2,
-  Bot,
-} from 'lucide-react'
+import { Key, ShieldAlert, AlertCircle } from 'lucide-react'
 import { useTranslation } from '@/lib/hooks/use-translation'
-import { useModels, useDeleteModel, useModelDefaults, useUpdateModelDefaults, useAutoAssignDefaults, useTestModel } from '@/lib/hooks/use-models'
+import { useModels, useModelDefaults } from '@/lib/hooks/use-models'
 import {
   useCredentials,
-  useCredential,
   useCredentialStatus,
   useEnvStatus,
-  useCreateCredential,
-  useUpdateCredential,
-  useDeleteCredential,
-  useTestCredential,
-  useDiscoverModels,
-  useRegisterModels,
-  useMigrateFromEnv,
 } from '@/lib/hooks/use-credentials'
 import { Credential, CreateCredentialRequest, UpdateCredentialRequest, DiscoveredModel } from '@/lib/api/credentials'
 import { Model, ModelDefaults } from '@/lib/types/models'
@@ -1466,14 +1425,19 @@ export default function ApiKeysPage() {
   const { data: defaults, isLoading: defaultsLoading } = useModelDefaults()
   const { data: credentialStatus } = useCredentialStatus()
   const { data: envStatus } = useEnvStatus()
+  const {
+    data: providers,
+    isLoading: providersLoading,
+    isError: providersError,
+  } = useProviders()
 
   const encryptionReady = credentialStatus?.encryption_configured ?? true
 
   // Group credentials by provider
   const credentialsByProvider = useMemo(() => {
     const grouped: Record<string, Credential[]> = {}
-    for (const provider of ALL_PROVIDERS) {
-      grouped[provider] = []
+    for (const provider of providers ?? []) {
+      grouped[provider.name] = []
     }
     if (credentials) {
       for (const cred of credentials) {
@@ -1482,28 +1446,28 @@ export default function ApiKeysPage() {
       }
     }
     return grouped
-  }, [credentials])
+  }, [credentials, providers])
 
   // Providers needing migration
   const providersToMigrate = useMemo(() => {
     if (!envStatus || !credentialStatus) return []
-    const providers: string[] = []
+    const result: string[] = []
     for (const provider in envStatus) {
       if (envStatus[provider] && credentialStatus.source[provider] === 'environment') {
-        providers.push(provider)
+        result.push(provider)
       }
     }
-    return providers
+    return result
   }, [envStatus, credentialStatus])
 
-  // Sort: configured providers first
+  // Sort: configured providers first (the backend registry owns the base order)
   const sortedProviders = useMemo(() => {
-    return [...ALL_PROVIDERS].sort((a, b) => {
-      const aHas = (credentialsByProvider[a]?.length || 0) > 0 ? 1 : 0
-      const bHas = (credentialsByProvider[b]?.length || 0) > 0 ? 1 : 0
+    return [...(providers ?? [])].sort((a, b) => {
+      const aHas = (credentialsByProvider[a.name]?.length || 0) > 0 ? 1 : 0
+      const bHas = (credentialsByProvider[b.name]?.length || 0) > 0 ? 1 : 0
       return bHas - aHas
     })
-  }, [credentialsByProvider])
+  }, [providers, credentialsByProvider])
 
   // Group providers by category
   const cloudProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p] === 'Cloud')

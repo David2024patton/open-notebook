@@ -6,15 +6,14 @@ Supports both single-password and multi-user modes with role-based access contro
 Roles: superuser > admin > user
 """
 
-from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from loguru import logger
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from api.auth import (
+from api.auth_multiuser import (
     AUTH_MODE,
     create_access_token,
     decode_access_token,
@@ -23,7 +22,7 @@ from api.auth import (
 )
 from open_notebook.domain.referral_code import ReferralCode
 from open_notebook.domain.signup_request import SignupRequest
-from open_notebook.domain.user import ROLE_HIERARCHY, ROLES, User
+from open_notebook.domain.user import ROLES, User
 from open_notebook.utils.encryption import get_secret_from_env
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -625,10 +624,11 @@ async def setup_2fa(current_user: User = Depends(require_auth)):
     if AUTH_MODE != "multi-user":
         raise HTTPException(status_code=400, detail="Multi-user mode not enabled")
     
+    import base64
+    import io
+
     import pyotp
     import qrcode
-    import io
-    import base64
     
     # Generate a new TOTP secret
     secret = pyotp.random_base32()
@@ -937,7 +937,7 @@ async def toggle_user_active(
     status_msg = "activated" if user.is_active else "deactivated"
     logger.info(f"User {status_msg}: {user.username} by {current_user.username}")
     
-    return {"message": f"User {status}"}
+    return {"message": f"User {status_msg}"}
 
 
 @router.post("/claim-legacy-content")
@@ -1265,8 +1265,9 @@ async def transfer_superuser(
         raise HTTPException(status_code=401, detail="Password verification failed")
 
     # 2. Verify 2FA — the current superuser MUST have 2FA enabled
-    from open_notebook.domain.totp import UserTOTP
     import pyotp
+
+    from open_notebook.domain.totp import UserTOTP
 
     user_totp = await UserTOTP.get_by_user_id(current_user.id or "")
     if not user_totp or not user_totp.totp_enabled:
@@ -1412,7 +1413,6 @@ async def reset_ssh_token(current_user: User = Depends(require_role("admin"))):
 
     # Apply the new password immediately by running setup-ssh.sh
     import asyncio
-    import subprocess
     try:
         proc = await asyncio.create_subprocess_exec(
             "/bin/bash", "/app/scripts/setup-ssh.sh",
@@ -1445,7 +1445,6 @@ async def toggle_ssh(
     if AUTH_MODE != "multi-user":
         raise HTTPException(status_code=400, detail="Multi-user mode not enabled")
 
-    import subprocess
     import asyncio
 
     # Check if sshd is currently running

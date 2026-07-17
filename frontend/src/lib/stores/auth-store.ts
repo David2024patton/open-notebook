@@ -1,5 +1,7 @@
+import axios from 'axios'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import apiClient from '@/lib/api/client'
 import { getApiUrl } from '@/lib/config'
 
 interface UserInfo {
@@ -65,9 +67,8 @@ export const useAuthStore = create<AuthState>()(
 
       checkAuthRequired: async () => {
         try {
-          const apiUrl = await getApiUrl()
-          const response = await fetch(`${apiUrl}/api/auth/status`, {
-            cache: 'no-store',
+          const response = await apiClient.get<{ auth_enabled?: boolean }>('/auth/status', {
+            headers: { 'Cache-Control': 'no-store' },
           })
 
           if (!response.ok) {
