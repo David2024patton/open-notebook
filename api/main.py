@@ -13,6 +13,10 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+# DIAGNOSTIC (temporary): stores the last migration failure so it can be
+# surfaced via /api/_debug/migration-error when SSH is unavailable.
+_migration_error: str | None = None
+
 from api.auth_multiuser import (
     get_auth_excluded_paths,
     get_auth_middleware,
@@ -309,8 +313,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"CRITICAL: Database migration failed: {str(e)}")
         logger.exception(e)
-        # Fail fast - don't start the API with an outdated database schema
-        raise RuntimeError(f"Failed to run database migrations: {str(e)}") from e
+        # DIAGNOSTIC (temporary): do not fail-fast so the API stays up and the
+        # error can be surfaced via /api/_debug/migration-error.
+        global _migration_error
+        _migration_error = f"{type(e).__name__}: {e}"
+        # raise RuntimeError(f"Failed to run database migrations: {str(e)}") from e
+
 
     # Define the SurrealDB JWT scope that powers native tenant permissions.
     try:
@@ -566,6 +574,24 @@ app.include_router(modes.router, prefix="/api", tags=["modes"])
 app.include_router(sandbox.router, prefix="/api", tags=["sandbox"])
 app.include_router(side_by_side.router, prefix="/api", tags=["side-by-side"])
 app.include_router(browser.router, prefix="/api", tags=["browser"])
+
+
+# DIAGNOSTIC (temporary): surface migration errors without SSH access.
+@app.get("/api/_debug/migration-error")
+async def _debug_migration_error(request: Request):
+    token = request.headers.get("x-debug-token")
+    if token != os.environ.get("OPEN_NOTEBOOK_ENCRYPTION_KEY"):
+        raise StarletteHTTPException(status_code=403, detail="forbidden")
+    result = {"startup_migration_error": _migration_error}
+    try:
+        mm = AsyncMigrationManager()
+        result["current_version"] = await mm.get_current_version()
+        # Re-run pending migrations on-demand to capture the precise error.
+        await mm.run_migration_up()
+        result["rerun"] = "ok"
+    except Exception as e:
+        result["rerun_error"] = f"{type(e).__name__}: {e}"
+    return result
 
 
 @app.get("/")
