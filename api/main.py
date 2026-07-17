@@ -13,10 +13,6 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-# DIAGNOSTIC (temporary): stores the last migration failure so it can be
-# surfaced via /api/_debug/migration-error when SSH is unavailable.
-_migration_error: str | None = None
-
 from api.auth_multiuser import (
     get_auth_excluded_paths,
     get_auth_middleware,
@@ -63,14 +59,6 @@ from api.routers import (
 )
 from api.routers import commands as commands_router
 from open_notebook.database.async_migrate import AsyncMigrationManager
-# DIAGNOSTIC (temporary): repository.py was reverted to pre-Phase2.5 (no
-# current_jwt/current_owner_id); define local stubs so the disabled bridge
-# still imports. Remove when Phase 2.5 repository changes are restored.
-from contextlib import contextmanager  # noqa
-from contextvars import ContextVar as _ContextVar
-
-current_jwt = _ContextVar("current_jwt", default=None)
-current_owner_id = _ContextVar("current_owner_id", default=None)
 from open_notebook.exceptions import (
     AuthenticationError,
     ConfigurationError,
@@ -204,98 +192,6 @@ async def _run_database_migrations() -> None:
         logger.info("Database is already at the latest version. No migrations needed.")
 
 
-async def _define_user_scope() -> None:
-    """
-    Define the SurrealDB `user_scope` JWT scope used for native multi-tenancy.
-
-    The scope lets request sessions authenticate with our existing app JWT
-    (same HMAC secret as OPEN_NOTEBOOK_ENCRYPTION_KEY / JWT_SECRET_KEY) and
-    exposes the user identity to record-level PERMISSIONS via $auth.id and
-    $auth.role. Defined at runtime (not in a .surql file) because the HMAC key
-    is an environment secret. Idempotent: re-DEFINE overwrites.
-
-    Only relevant in multi-user mode; in single-password mode the app uses
-    root DB sessions and PERMISSIONS are never engaged.
-    """
-    if not is_multi_user_mode():
-        return
-
-    from api.auth_multiuser import get_jwt_secret
-    from open_notebook.database.repository import db_connection
-
-    secret = get_jwt_secret()
-    if not secret:
-        logger.warning(
-            "Skipping user_scope definition: no JWT secret configured. "
-            "Native tenant permissions will not be enforced until set."
-        )
-        return
-
-    # SurrealDB's DEFINE SCOPE ... KEY expects a string literal, not a bind
-    # parameter, so interpolate the (server-side, trusted) secret directly.
-    # Escape single quotes to avoid breaking the statement.
-    safe_secret = secret.replace("'", "\\'")
-    scope_sql = (
-        f"DEFINE SCOPE IF NOT EXISTS user_scope "
-        f"TYPE JWT ALGO HS256 KEY '{safe_secret}' "
-        f"CLAIM sub AS id, CLAIM role AS role;"
-    )
-    try:
-        async with db_connection() as conn:
-            await conn.query(scope_sql)
-        logger.success("Defined SurrealDB user_scope for native multi-tenancy")
-    except Exception as e:
-        logger.error(f"Failed to define user_scope: {str(e)}")
-        logger.exception(e)
-        # Non-fatal: root sessions still work; tenant isolation falls back to
-        # application-layer enforcement until the scope is available.
-
-
-class RequestTenantBridge:
-    """
-    Middleware that bridges the authenticated user (stashed on request.state by
-    the auth middleware) into the per-request database contextvars. This makes
-    db_connection() sign in via the `user_scope` so SurrealDB enforces tenant
-    PERMISSIONS for the duration of the request, and lets repo_create stamp
-    `owner` on tenant records.
-    """
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        user_id = scope.get("state", {}).get("user_id")
-        jwt = None
-        if user_id:
-            # Recover the raw bearer token from headers (auth middleware
-            # already validated it; we just need it to authenticate the scope).
-            headers = dict(scope.get("headers", []))
-            auth_header = headers.get(b"authorization")
-            if auth_header:
-                try:
-                    scheme, token = auth_header.decode().split(" ", 1)
-                    if scheme.lower() == "bearer":
-                        jwt = token
-                except ValueError:
-                    jwt = None
-
-        jwt_token = current_jwt.set(jwt) if jwt else None
-        owner_token = (
-            current_owner_id.set(user_id) if user_id else None
-        )
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            if jwt_token is not None:
-                current_jwt.reset(jwt_token)
-            if owner_token is not None:
-                current_owner_id.reset(owner_token)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -320,21 +216,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"CRITICAL: Database migration failed: {str(e)}")
         logger.exception(e)
-        # DIAGNOSTIC (temporary): do not fail-fast so the API stays up and the
-        # error can be surfaced via /api/_debug/migration-error.
-        global _migration_error
-        _migration_error = f"{type(e).__name__}: {e}"
-        # raise RuntimeError(f"Failed to run database migrations: {str(e)}") from e
-
-
-    # Define the SurrealDB JWT scope that powers native tenant permissions.
-    # DIAGNOSTIC (temporary): skip scope definition to isolate worker crash.
-    try:
-        if False:
-            await _define_user_scope()
-    except Exception as e:
-        logger.error(f"user_scope definition failed: {str(e)}")
-        logger.exception(e)
+        # Fail fast - don't start the API with an outdated database schema
+        raise RuntimeError(f"Failed to run database migrations: {str(e)}") from e
 
     # Run podcast profile data migration (legacy strings -> Model registry)
     try:
@@ -384,10 +267,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# DIAGNOSTIC (temporary): enable debug so Starlette returns tracebacks in 500
-# responses, letting us debug without SSH access.
-app.debug = True
-
 if CORS_IS_DEFAULT_WILDCARD:
     logger.warning(
         "CORS_ORIGINS is not set — API accepts cross-origin requests from any "
@@ -400,12 +279,6 @@ else:
 
 # Add rate limiting middleware (runs before auth so 429s short-circuit)
 app.add_middleware(RateLimitMiddleware)
-
-# Bridge the authenticated user into per-request DB contextvars (tenant scope).
-# Must be added BEFORE the auth middleware so it ends up INNERMOST and runs
-# AFTER the auth middleware has populated request.state.user_id.
-# DIAGNOSTIC (temporary): disabled to isolate 500-on-every-request cause.
-# app.add_middleware(RequestTenantBridge)
 
 # Add authentication middleware (modular: selected by OPEN_NOTEBOOK_AUTH_MODE).
 # In multi-user mode this installs MultiUserAuthMiddleware (JWT); otherwise it
@@ -424,45 +297,6 @@ logger.info(
     f"Max request body size: {MAX_UPLOAD_SIZE_BYTES / (1024 * 1024):g}MB "
     "(set OPEN_NOTEBOOK_MAX_UPLOAD_SIZE_MB to change)"
 )
-# DIAGNOSTIC (temporary): outermost middleware that catches ANY exception
-# (including from inner middleware) and returns the traceback as JSON so we
-# can debug without SSH access. Remove once SSH/connectivity is restored.
-import traceback as _diag_tb
-
-
-class _DiagMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        try:
-            await self.app(scope, receive, send)
-        except Exception as e:  # noqa: BLE001
-            import json as _json
-
-            body = _json.dumps(
-                {
-                    "diag_error": type(e).__name__,
-                    "diag_message": str(e),
-                    "diag_traceback": "".join(
-                        _diag_tb.format_exception(type(e), e, e.__traceback__)
-                    ),
-                }
-            ).encode()
-            send = send  # noqa
-            await send(
-                {
-                    "type": "http.response.start",
-                    "status": 500,
-                    "headers": [
-                        (b"content-type", b"application/json"),
-                        (b"access-control-allow-origin", b"*"),
-                    ],
-                }
-            )
-            await send({"type": "http.response.body", "body": body})
-
-
 app.add_middleware(MaxBodySizeMiddleware, max_body_size=MAX_UPLOAD_SIZE_BYTES)
 
 # Add CORS middleware last (so it processes first, and so it can attach
@@ -485,10 +319,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# DIAGNOSTIC (temporary): outermost middleware must be LAST-added so it wraps
-# every other middleware and the app, returning any exception's traceback.
-app.add_middleware(_DiagMiddleware)
-
 
 # Custom exception handler to ensure CORS headers are included in error responses
 # This helps when errors occur before the CORS middleware can process them
@@ -506,24 +336,6 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
         status_code=exc.status_code,
         content={"detail": exc.detail},
         headers={**(exc.headers or {}), **_cors_headers(request)},
-    )
-
-
-# DIAGNOSTIC (temporary): surface unhandled 500 tracebacks via the API so we
-# can debug without SSH access. Remove once connectivity/SSH is restored.
-import traceback as _tb
-
-
-@app.exception_handler(Exception)
-async def _diag_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "internal_error",
-            "type": type(exc).__name__,
-            "message": str(exc),
-            "traceback": _tb.format_exception(type(exc), exc, exc.__traceback__),
-        },
     )
 
 
@@ -649,24 +461,6 @@ app.include_router(modes.router, prefix="/api", tags=["modes"])
 app.include_router(sandbox.router, prefix="/api", tags=["sandbox"])
 app.include_router(side_by_side.router, prefix="/api", tags=["side-by-side"])
 app.include_router(browser.router, prefix="/api", tags=["browser"])
-
-
-# DIAGNOSTIC (temporary): surface migration errors without SSH access.
-@app.get("/api/_debug/migration-error")
-async def _debug_migration_error(request: Request):
-    token = request.headers.get("x-debug-token")
-    if token != os.environ.get("OPEN_NOTEBOOK_ENCRYPTION_KEY"):
-        raise StarletteHTTPException(status_code=403, detail="forbidden")
-    result = {"startup_migration_error": _migration_error}
-    try:
-        mm = AsyncMigrationManager()
-        result["current_version"] = await mm.get_current_version()
-        # Re-run pending migrations on-demand to capture the precise error.
-        await mm.run_migration_up()
-        result["rerun"] = "ok"
-    except Exception as e:
-        result["rerun_error"] = f"{type(e).__name__}: {e}"
-    return result
 
 
 @app.get("/")
