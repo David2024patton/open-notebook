@@ -375,6 +375,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# DIAGNOSTIC (temporary): enable debug so Starlette returns tracebacks in 500
+# responses, letting us debug without SSH access.
+app.debug = True
+
 if CORS_IS_DEFAULT_WILDCARD:
     logger.warning(
         "CORS_ORIGINS is not set — API accepts cross-origin requests from any "
