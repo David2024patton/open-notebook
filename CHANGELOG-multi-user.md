@@ -7,7 +7,7 @@ All notable changes to the multi-user feature implementation are documented here
 ## [Unreleased] - Multi-User Support
 
 ### Summary
-This feature adds multi-user support to Open Notebook with JWT-based authentication, user registration, login, and admin management capabilities. The implementation is backward compatible - existing single-password mode continues to work unchanged.
+This feature adds multi-user support to Cortex with JWT-based authentication, user registration, login, and admin management capabilities. The implementation is backward compatible - existing single-password mode continues to work unchanged.
 
 ### Added
 - `open_notebook/domain/user.py` — New User domain model with username, email, password_hash, role, is_active fields

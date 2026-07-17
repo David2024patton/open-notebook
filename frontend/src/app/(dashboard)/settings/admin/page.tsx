@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
@@ -53,7 +53,7 @@ export default function AdminSettingsPage() {
             <h2 className="text-lg font-semibold">Access Denied</h2>
             <p className="text-sm text-muted-foreground">Admin privileges required</p>
             <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground">
-              â† Back to Settings
+              ← Back to Settings
             </Link>
           </div>
         </div>
@@ -360,7 +360,7 @@ function SSHSettingsSection() {
       if (resp.ok) {
         const data = await resp.json()
         setNewToken(data.new_token)
-        toast.success('SSH token reset â€” save it now, it won\'t be shown again')
+        toast.success('SSH token reset — save it now, it won\'t be shown again')
         fetchStatus()
       } else {
         const err = await resp.json()
@@ -414,7 +414,7 @@ function SSHSettingsSection() {
           SSH Server Access
         </h3>
         <p className="text-sm text-muted-foreground">
-          Manage SSH terminal access to the Open Notebook container. Useful for MCP SSH integrations and debugging.
+          Manage SSH terminal access to the Cortex container. Useful for MCP SSH integrations and debugging.
         </p>
       </div>
 
@@ -458,7 +458,7 @@ function SSHSettingsSection() {
             </div>
             <div>
               <div className="text-muted-foreground text-xs">Token</div>
-              <code className="text-sm">{status.token_set ? (status.token_preview || 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢') : 'not set'}</code>
+              <code className="text-sm">{status.token_set ? (status.token_preview || '••••••••') : 'not set'}</code>
             </div>
           </div>
 
@@ -480,7 +480,7 @@ function SSHSettingsSection() {
             {newToken && (
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
                 <div className="text-xs font-medium text-amber-800 dark:text-amber-200">
-                  âš  Save this token now â€” it will not be shown again.
+                  ⚠ Save this token now — it will not be shown again.
                 </div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 bg-white dark:bg-black p-2 rounded text-sm font-mono break-all">{newToken}</code>
@@ -582,12 +582,12 @@ function TransferSuperuserSection() {
       </div>
 
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2">
-        <div className="text-sm font-medium text-red-800 dark:text-red-200">âš  Security Requirements</div>
+        <div className="text-sm font-medium text-red-800 dark:text-red-200">⚠ Security Requirements</div>
         <ul className="text-xs text-red-700 dark:text-red-300 space-y-1 ml-4 list-disc">
           <li>You must enter your current password</li>
           <li>You must enter a valid 2FA code (2FA must be enabled on your account)</li>
           <li>The target user must be an admin (not a regular user)</li>
-          <li>This action is irreversible â€” you cannot undo it</li>
+          <li>This action is irreversible — you cannot undo it</li>
         </ul>
       </div>
 
@@ -633,7 +633,7 @@ function TransferSuperuserSection() {
               autoComplete="one-time-code"
             />
             <p className="text-xs text-muted-foreground">
-              Enable 2FA in Settings â†’ Profile if you haven't already.
+              Enable 2FA in Settings → Profile if you haven't already.
             </p>
           </div>
 

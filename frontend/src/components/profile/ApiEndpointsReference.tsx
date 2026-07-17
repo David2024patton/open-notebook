@@ -573,7 +573,7 @@ export function ApiEndpointsReference() {
         </div>
         <div className="text-xs text-muted-foreground space-y-2">
           <p>
-            <strong>Open Notebook</strong> is an AI-powered knowledge management system. You can:
+            <strong>Cortex</strong> is an AI-powered knowledge management system. You can:
           </p>
           <ul className="list-disc pl-4 space-y-1">
             <li><strong>Add content</strong> — Import web pages, documents, and text from any source</li>

@@ -1,7 +1,7 @@
 =======
-# Open Notebook — Agent Rules
+# Cortex — Agent Rules
 
-Open Notebook is an open-source, privacy-focused alternative to Google's Notebook LM: an AI-powered research assistant with multi-provider AI support, fully self-hostable.
+Cortex is an open-source, privacy-focused alternative to Google's Notebook LM: an AI-powered research assistant with multi-provider AI support, fully self-hostable.
 
 This file holds the project-wide rules every coding session needs. Component rules: [open_notebook/AGENTS.md](open_notebook/AGENTS.md) (backend — also covers `api/`, `commands/`, `prompts/`) and [frontend/AGENTS.md](frontend/AGENTS.md). Knowledge lives in the docs (see [Where to look](#where-to-look)) — read it on demand instead of guessing.
 
@@ -47,7 +47,7 @@ Or all at once: `make start-all` (status: `make status`, stop: `make stop-all`).
 
 # Multi-User Extension Notes
 
-# Agent Notes - Open Notebook Multi-User
+# Agent Notes - Cortex Multi-User
 
 This file documents critical fixes, patterns, and gotchas discovered during development so future agents (and humans) don't repeat the same mistakes.
 
@@ -129,7 +129,7 @@ Applied to login, registration, profile update, and password change error handle
 
 ### Left Navigation
 - `frontend/src/components/layout/AppSidebar.tsx`: reduced section header size and visual weight
-- `frontend/src/components/layout/TopNavbar.tsx`: moved Open Notebook branding to top-left for both mobile and desktop
+- `frontend/src/components/layout/TopNavbar.tsx`: moved Cortex branding to top-left for both mobile and desktop
 - Removed branding from desktop sidebar
 - `frontend/src/components/layout/MobileNav.tsx`: added mobile bottom navigation with back/forward/home and a menu dropdown
 - `frontend/src/components/layout/AppShell.tsx`: sidebar hidden on mobile, bottom nav visible on mobile, main content gets bottom padding on mobile

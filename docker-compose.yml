@@ -59,6 +59,13 @@ services:
       # for local use; override them in a .env file before exposing the instance
       # (the same values configure the surrealdb service above).
       - SURREAL_URL=ws://surrealdb:8000/rpc
+
+      # Public API URL the browser uses for /api/* requests. Set to the
+      # Traefik-facing domain so the browser talks same-origin (Traefik ->
+      # frontend :8502 -> Next.js rewrite proxy -> backend :5055 internal).
+      # Without this, the /config route auto-detects :5055 which is NOT
+      # published, producing "Unable to Connect to API Server".
+      - API_URL=${API_URL:-https://brain.itak.live}
       - SURREAL_USER=${SURREAL_USER:-root}
       - SURREAL_PASSWORD=${SURREAL_PASSWORD:-root}
       - SURREAL_NAMESPACE=open_notebook

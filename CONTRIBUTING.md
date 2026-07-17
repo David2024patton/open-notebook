@@ -1,4 +1,4 @@
-# Contributing to Open Notebook
+# Contributing to Cortex
 
 **📍 This file has moved!**
 
