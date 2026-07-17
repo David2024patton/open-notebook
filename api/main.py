@@ -410,6 +410,47 @@ logger.info(
     f"Max request body size: {MAX_UPLOAD_SIZE_BYTES / (1024 * 1024):g}MB "
     "(set OPEN_NOTEBOOK_MAX_UPLOAD_SIZE_MB to change)"
 )
+# DIAGNOSTIC (temporary): outermost middleware that catches ANY exception
+# (including from inner middleware) and returns the traceback as JSON so we
+# can debug without SSH access. Remove once SSH/connectivity is restored.
+import traceback as _diag_tb
+
+
+class _DiagMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await self.app(scope, receive, send)
+        except Exception as e:  # noqa: BLE001
+            import json as _json
+
+            body = _json.dumps(
+                {
+                    "diag_error": type(e).__name__,
+                    "diag_message": str(e),
+                    "diag_traceback": "".join(
+                        _diag_tb.format_exception(type(e), e, e.__traceback__)
+                    ),
+                }
+            ).encode()
+            send = send  # noqa
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 500,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"access-control-allow-origin", b"*"),
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+
+
+app.add_middleware(_DiagMiddleware)
+
 app.add_middleware(MaxBodySizeMiddleware, max_body_size=MAX_UPLOAD_SIZE_BYTES)
 
 # Add CORS middleware last (so it processes first, and so it can attach
