@@ -452,6 +452,24 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     )
 
 
+# DIAGNOSTIC (temporary): surface unhandled 500 tracebacks via the API so we
+# can debug without SSH access. Remove once connectivity/SSH is restored.
+import traceback as _tb
+
+
+@app.exception_handler(Exception)
+async def _diag_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "internal_error",
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": _tb.format_exception(type(exc), exc, exc.__traceback__),
+        },
+    )
+
+
 @app.exception_handler(NotFoundError)
 async def not_found_error_handler(request: Request, exc: NotFoundError):
     return JSONResponse(
