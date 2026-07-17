@@ -15,31 +15,44 @@ services:
       - SURREAL_EXPERIMENTAL_GRAPHQL=true
     restart: always
     pull_policy: always
+    # Healthcheck: lets open_notebook wait for the DB to actually accept
+    # connections before starting, which fixes the "API starts before DB is
+    # ready" race that caused local Docker flakiness.
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   open_notebook:
     build: .
     image: open-notebook:latest
     ports:
-      - "8502:8502"  # Web UI
-      - "5055:5055"  # REST API
-      - "2222:2222"  # SSH
+      - "8502:8502"  # Web UI (public)
+      # NOTE: 5055 (REST API) is intentionally NOT published. It is reached
+      # internally by the frontend and, on a VPS, proxied by the reverse proxy
+      # (see Phase 2). Do not expose it directly to the internet.
+      - "2222:2222"  # SSH (optional; restrict in production)
     environment:
-      # REQUIRED: Change this to your own secret string
-      # This encrypts your API keys in the database
-      - OPEN_NOTEBOOK_ENCRYPTION_KEY=open-notebook-multi-user-secret-key-2024
+      # REQUIRED secrets — set these in a .env file before deploying. The
+      # ${VAR:?...} syntax makes Compose fail fast with a clear message if a
+      # secret is missing, so no container ever runs with an insecure default.
+      - OPEN_NOTEBOOK_ENCRYPTION_KEY=${OPEN_NOTEBOOK_ENCRYPTION_KEY:?set OPEN_NOTEBOOK_ENCRYPTION_KEY in .env}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY in .env}
 
       # Multi-user mode configuration
       - OPEN_NOTEBOOK_AUTH_MODE=multi-user
-      - JWT_SECRET_KEY=super-secret-jwt-key-for-open-notebook-multi-user-2024
-      - JWT_EXPIRATION_HOURS=24
+      - JWT_EXPIRATION_HOURS=${JWT_EXPIRATION_HOURS:-24}
 
-      # SSH access (optional — change credentials in production!)
-      - SSH_USER=notebook
-      - SSH_PASSWORD=notebook
+      # SSH access (optional). Override SSH_PASSWORD in .env for production.
+      - SSH_USER=${SSH_USER:-notebook}
+      - SSH_PASSWORD=${SSH_PASSWORD:-notebook}
       - SSH_PORT=2222
 
-      # Ollama endpoint (host machine)
-      - OLLAMA_API_BASE=http://host.docker.internal:11434
+      # Ollama endpoint. On a local desktop use host.docker.internal; on a
+      # Linux VPS point this at the host's LAN/VPN IP instead (see Phase 2).
+      - OLLAMA_API_BASE=${OLLAMA_API_BASE:-http://host.docker.internal:11434}
 
       # Database connection. SURREAL_USER / SURREAL_PASSWORD default to root:root
       # for local use; override them in a .env file before exposing the instance
@@ -55,5 +68,6 @@ services:
       # Create a file named authorized_keys with your pubkey, then uncomment:
       # - ./authorized_keys:/app/ssh/authorized_keys:ro
     depends_on:
-      - surrealdb
+      surrealdb:
+        condition: service_healthy
     restart: always
