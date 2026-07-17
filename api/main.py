@@ -321,8 +321,10 @@ async def lifespan(app: FastAPI):
 
 
     # Define the SurrealDB JWT scope that powers native tenant permissions.
+    # DIAGNOSTIC (temporary): skip scope definition to isolate worker crash.
     try:
-        await _define_user_scope()
+        if False:
+            await _define_user_scope()
     except Exception as e:
         logger.error(f"user_scope definition failed: {str(e)}")
         logger.exception(e)
