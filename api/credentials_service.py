@@ -43,6 +43,7 @@ PROVIDER_ENV_CONFIG: Dict[str, dict] = {
     "elevenlabs": {"required": ["ELEVENLABS_API_KEY"]},
     "deepgram": {"required": ["DEEPGRAM_API_KEY"]},
     "ollama": {"required": ["OLLAMA_API_BASE"]},
+    "ollama_cloud": {"required_any": ["OLLAMA_CLOUD_BASE_URL", "OLLAMA_CLOUD_API_KEY"]},
     "vertex": {
         "required": ["VERTEX_PROJECT", "VERTEX_LOCATION"],
         "optional": ["GOOGLE_APPLICATION_CREDENTIALS"],
@@ -85,6 +86,7 @@ PROVIDER_MODALITIES: Dict[str, List[str]] = {
     "elevenlabs": ["text_to_speech", "speech_to_text"],
     "deepgram": ["text_to_speech"],
     "ollama": ["language", "embedding"],
+    "ollama_cloud": ["language", "embedding"],
     "vertex": ["language", "embedding", "text_to_speech"],
     "azure": ["language", "embedding", "speech_to_text", "text_to_speech"],
     "openai_compatible": ["language", "embedding", "speech_to_text", "text_to_speech"],
@@ -380,6 +382,42 @@ async def get_env_status() -> Dict[str, bool]:
     return env_status
 
 
+async def _test_ollama_connection_with_auth(
+    base_url: str, api_key: Optional[str] = None
+) -> tuple:
+    """Test a remote/cloud Ollama endpoint that may require an API key."""
+    try:
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{base_url.rstrip('/')}/api/tags", headers=headers
+            )
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get("models", [])
+                count = len(models)
+                if count > 0:
+                    names = [m.get("name", "unknown") for m in models[:3]]
+                    listing = ", ".join(names)
+                    if count > 3:
+                        listing += f" (+{count - 3} more)"
+                    return True, f"Connected. {count} models available: {listing}"
+                return True, "Connected successfully (no models listed)"
+            if response.status_code == 401:
+                return False, "Invalid API key"
+            if response.status_code == 403:
+                return False, "API key lacks required permissions"
+            return False, f"Server returned status {response.status_code}"
+    except httpx.ConnectError:
+        return False, "Cannot connect to cloud Ollama endpoint. Check the URL."
+    except httpx.TimeoutException:
+        return False, "Connection timed out. Check the endpoint URL."
+    except Exception as e:
+        return False, f"Connection error: {str(e)[:100]}"
+
+
 async def test_credential(credential_id: str) -> dict:
     """
     Test connection using a credential's configuration.
@@ -403,6 +441,18 @@ async def test_credential(credential_id: str) -> dict:
         if provider == "ollama":
             base_url = config.get("base_url", "http://localhost:11434")
             success, message = await _test_ollama_connection(base_url)
+            return {"provider": provider, "success": success, "message": message}
+
+        if provider == "ollama_cloud":
+            base_url = config.get("base_url")
+            api_key = config.get("api_key")
+            if not base_url:
+                return {
+                    "provider": provider,
+                    "success": False,
+                    "message": "No cloud base URL configured",
+                }
+            success, message = await _test_ollama_connection_with_auth(base_url, api_key)
             return {"provider": provider, "success": success, "message": message}
 
         # Local LLM providers all use OpenAI-compatible API
@@ -594,6 +644,34 @@ async def discover_with_config(provider: str, config: dict) -> List[dict]:
                 ]
         except Exception as e:
             logger.warning(f"Failed to discover Ollama models: {e}")
+            return []
+
+    if provider == "ollama_cloud":
+        if not base_url:
+            return []
+        try:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{base_url.rstrip('/')}/api/tags",
+                    headers=headers,
+                    timeout=15.0,
+                )
+                response.raise_for_status()
+                data = response.json()
+                return [
+                    {
+                        "name": m.get("name", ""),
+                        "provider": "ollama_cloud",
+                        "model_type": classify_model_type(m.get("name", ""), "ollama"),
+                    }
+                    for m in data.get("models", [])
+                    if m.get("name")
+                ]
+        except Exception as e:
+            logger.warning(f"Failed to discover ollama_cloud models: {e}")
             return []
 
     if provider == "openai_compatible":

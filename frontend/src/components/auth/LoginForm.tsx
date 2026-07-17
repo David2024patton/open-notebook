@@ -13,7 +13,6 @@ import { useTranslation } from '@/lib/hooks/use-translation'
 
 export function LoginForm() {
   const { t, language } = useTranslation()
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -21,7 +20,8 @@ export function LoginForm() {
   const [isRegistering, setIsRegistering] = useState(false)
   const [registrationSuccess, setRegistrationSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const { login, register, isLoading, error } = useAuth()
+  const [twoFACode, setTwoFACode] = useState('')
+  const { login, register, isLoading, error, requires2FA, verify2FA } = useAuth()
   const { authRequired, authMode, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [configInfo, setConfigInfo] = useState<{ apiUrl: string; version: string; buildTime: string } | null>(null)
@@ -130,10 +130,19 @@ export function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (isRegistering) {
-      // Handle registration
-      if (username.trim() && password.trim() && email.trim()) {
-        const result = await register(username, password, email || undefined, name || undefined, referralCode || undefined)
+    if (requires2FA) {
+      // Handle 2FA verification
+      if (twoFACode.trim()) {
+        try {
+          await verify2FA(twoFACode)
+        } catch (error) {
+          console.error('Unhandled error during 2FA verification:', error)
+        }
+      }
+    } else if (isRegistering) {
+      // Handle registration (email is the username)
+      if (email.trim() && password.trim()) {
+        const result = await register(email, password, name || undefined, referralCode || undefined)
         if (result.success) {
           setRegistrationSuccess(true)
           setIsRegistering(false)
@@ -173,6 +182,7 @@ export function LoginForm() {
     setEmail('')
     setName('')
     setReferralCode('')
+    setTwoFACode('')
   }
 
   return (
@@ -180,25 +190,45 @@ export function LoginForm() {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            {isRegistering ? t('auth.registerTitle') : t('auth.loginTitle')}
+            {requires2FA ? 'Two-Factor Authentication' : (isRegistering ? t('auth.registerTitle') : t('auth.loginTitle'))}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isRegistering 
-              ? t('auth.registerDesc')
-              : t('auth.loginDesc')
+            {requires2FA 
+              ? 'Enter the 6-digit code from your authenticator app'
+              : (isRegistering 
+                ? t('auth.registerDesc')
+                : t('auth.loginDesc')
+              )
             }
           </p>
         </div>
 
         {registrationSuccess && (
           <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm">
-            Registration successful! Please login with your credentials.
+            Registration successful! Your account is pending admin approval. You'll be able to login once approved.
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Email field - for login in multi-user mode, or during registration */}
-          {(authMode === 'multi-user' || isRegistering) && (
+          {/* 2FA Code Input */}
+          {requires2FA && (
+            <div>
+              <Input
+                type="text"
+                placeholder="6-digit code"
+                value={twoFACode}
+                onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                disabled={isLoading}
+                required
+                maxLength={6}
+                autoComplete="one-time-code"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {/* Email field - always shown in multi-user mode */}
+          {!requires2FA && (authMode === 'multi-user' || isRegistering) && (
             <div>
               <Input
                 type="email"
@@ -207,26 +237,13 @@ export function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
                 required
+                autoComplete="email"
               />
             </div>
           )}
 
-          {/* Username field - only during registration */}
-          {isRegistering && (
-            <div>
-              <Input
-                type="text"
-                placeholder="Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={isLoading}
-                required
-              />
-            </div>
-          )}
-
-          {/* Name field - only during registration */}
-          {isRegistering && (
+          {/* Display name field - only during registration */}
+          {!requires2FA && isRegistering && (
             <div>
               <Input
                 type="text"
@@ -239,7 +256,7 @@ export function LoginForm() {
           )}
 
           {/* Referral code field - only during registration */}
-          {isRegistering && (
+          {!requires2FA && isRegistering && (
             <div>
               <Input
                 type="text"
@@ -251,29 +268,33 @@ export function LoginForm() {
             </div>
           )}
 
-          <div className="relative">
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              placeholder={t('auth.passwordPlaceholder')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-              required
-              className="pr-10"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              tabIndex={-1}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+          {/* Password field - not shown during 2FA */}
+          {!requires2FA && (
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                placeholder={t('auth.passwordPlaceholder')}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                required
+                className="pr-10"
+                autoComplete={isRegistering ? 'new-password' : 'current-password'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          )}
 
           {error && (
             <div className="space-y-2">
@@ -301,16 +322,16 @@ export function LoginForm() {
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading || (authMode === 'multi-user' ? !email.trim() : false) || !password.trim()}
+            disabled={isLoading || (requires2FA ? !twoFACode.trim() : (authMode === 'multi-user' ? !email.trim() : false)) || !password.trim()}
           >
             {isLoading 
               ? (isRegistering ? 'Registering...' : t('auth.signingIn'))
-              : (isRegistering ? 'Register' : t('auth.signIn'))
+              : (requires2FA ? 'Verify' : (isRegistering ? 'Register' : t('auth.signIn')))
             }
           </Button>
 
-          {/* Toggle between login and registration in multi-user mode */}
-          {authMode === 'multi-user' && (
+          {/* Toggle between login and registration in multi-user mode (not during 2FA) */}
+          {!requires2FA && authMode === 'multi-user' && (
             <div className="text-center">
               <button
                 type="button"

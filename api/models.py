@@ -86,6 +86,7 @@ class ModelResponse(BaseModel):
     provider: str
     type: str
     credential: Optional[str] = None
+    tags: Optional[List[str]] = None
     created: str
     updated: str
 
@@ -278,6 +279,7 @@ class SettingsResponse(BaseModel):
     default_embedding_option: Optional[str] = None
     auto_delete_files: Optional[str] = None
     youtube_preferred_languages: Optional[List[str]] = None
+    enforce_2fa: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -286,6 +288,7 @@ class SettingsUpdate(BaseModel):
     default_embedding_option: Optional[str] = None
     auto_delete_files: Optional[str] = None
     youtube_preferred_languages: Optional[List[str]] = None
+    enforce_2fa: Optional[str] = None
 
 
 # Sources API models

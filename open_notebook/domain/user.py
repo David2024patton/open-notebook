@@ -79,6 +79,31 @@ class User(ObjectModel):
         return user is not None
 
     @classmethod
+    async def count_all(cls) -> int:
+        """Return the total number of registered users."""
+        try:
+            result = await repo_query("SELECT count() AS n FROM user GROUP ALL")
+            if result and len(result) > 0:
+                return int(result[0].get("n", 0))
+            return 0
+        except Exception as e:
+            logger.error(f"Error counting users: {str(e)}")
+            raise DatabaseOperationError(e)
+
+    @classmethod
+    async def get_first_admin_or_superuser(cls) -> Optional["User"]:
+        """Return the first admin/superuser, or None if no users exist."""
+        try:
+            result = await repo_query(
+                "SELECT * FROM user WHERE role IN ['superuser', 'admin'] ORDER BY created ASC LIMIT 1"
+            )
+            if result:
+                return cls(**result[0])
+        except Exception as e:
+            logger.error(f"Error fetching first admin: {str(e)}")
+        return None
+
+    @classmethod
     async def email_exists(cls, email: str) -> bool:
         """Check if an email already exists."""
         user = await cls.get_by_email(email)

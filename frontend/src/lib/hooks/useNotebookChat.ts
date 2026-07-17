@@ -46,21 +46,25 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
   })
 
   // Fetch current session with messages
+  // NOTE: staleTime: Infinity prevents React Query from auto-refetching
+  // which would overwrite messages with stale checkpoint data
   const {
     data: currentSession,
-    refetch: refetchCurrentSession
   } = useQuery({
     queryKey: QUERY_KEYS.notebookChatSession(currentSessionId!),
     queryFn: () => chatApi.getSession(currentSessionId!),
-    enabled: !!notebookId && !!currentSessionId
+    enabled: !!notebookId && !!currentSessionId,
+    staleTime: Infinity
   })
 
-  // Update messages when current session changes
+  // Only update messages from session when switching sessions (not on refetch)
+  // This prevents stale checkpoint data from overwriting the execute response
   useEffect(() => {
-    if (currentSession?.messages) {
+    if (currentSession?.messages && currentSessionId) {
       setMessages(currentSession.messages)
     }
-  }, [currentSession])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId])
 
   // Auto-select most recent session when sessions are loaded
   useEffect(() => {
@@ -219,14 +223,25 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
         session_id: sessionId,
         message,
         context,
-        model_override: modelOverride ?? (currentSession?.model_override ?? undefined)
+        // model_override omitted to force default model
       })
+
+      // DEBUG: Check AI content from API
+      const apiAiMsgs = response.messages.filter((m: any) => m.type === 'ai')
+      if (apiAiMsgs.length > 0) {
+        const lastAi = apiAiMsgs[apiAiMsgs.length - 1]
+        if (!lastAi.content || lastAi.content.length === 0) {
+          console.error('[CHAT DEBUG] AI CONTENT IS EMPTY! Full response:', JSON.stringify(response))
+          console.error('[CHAT DEBUG] Request was:', JSON.stringify({session_id: sessionId, message, context: {sourcesCount: (context as any)?.sources?.length, notesCount: (context as any)?.notes?.length}, model_override: modelOverride ?? (currentSession?.model_override ?? undefined)}))
+          toast.error(`EMPTY AI response from model!`)
+        }
+      }
 
       // Update messages with API response
       setMessages(response.messages)
 
-      // Refetch current session to get updated data
-      await refetchCurrentSession()
+      // SKIP session refetch to prevent stale data from overwriting
+      // The execute response IS the source of truth
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } }, message?: string };
       console.error('Error sending message:', error)
@@ -242,7 +257,6 @@ export function useNotebookChat({ notebookId, sources, notes, contextSelections 
     currentSession,
     pendingModelOverride,
     buildContext,
-    refetchCurrentSession,
     queryClient,
     t
   ])

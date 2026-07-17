@@ -32,7 +32,7 @@ export function CollapsibleColumn({
               onClick={onToggle}
               className={cn(
                 'flex flex-col items-center justify-center gap-3',
-                'w-12 h-full min-h-0',
+                'w-10 h-full min-h-0',
                 'border rounded-lg',
                 'bg-card hover:bg-accent/50',
                 'transition-all duration-150',

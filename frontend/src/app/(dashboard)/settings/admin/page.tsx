@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { UserPlus, Trash2, Shield, ShieldCheck, ShieldAlert, Copy, Check, Ticket, Plus, Users, ArrowLeft } from 'lucide-react'
+import { UserPlus, Trash2, Shield, ShieldCheck, ShieldAlert, Copy, Check, Ticket, Plus, Users, ArrowLeft, Terminal, KeyRound, RefreshCw, Power, ArrowRightLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -39,9 +39,10 @@ interface ReferralCode {
 
 export default function AdminSettingsPage() {
   const { token, user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<'users' | 'referrals'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'referrals' | 'ssh' | 'transfer'>('users')
 
   const isAdmin = user?.role === 'admin' || user?.role === 'superuser'
+  const isSuperuser = user?.role === 'superuser'
 
   if (!isAdmin) {
     return (
@@ -52,7 +53,7 @@ export default function AdminSettingsPage() {
             <h2 className="text-lg font-semibold">Access Denied</h2>
             <p className="text-sm text-muted-foreground">Admin privileges required</p>
             <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground">
-              ← Back to Settings
+              â† Back to Settings
             </Link>
           </div>
         </div>
@@ -100,10 +101,36 @@ export default function AdminSettingsPage() {
                   Referral Codes
                 </button>
               )}
+              <button
+                onClick={() => setActiveTab('ssh')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'ssh'
+                    ? 'border-foreground text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Terminal className="h-4 w-4 mr-2 inline" />
+                SSH Access
+              </button>
+              {isSuperuser && (
+                <button
+                  onClick={() => setActiveTab('transfer')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'transfer'
+                      ? 'border-foreground text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <ArrowRightLeft className="h-4 w-4 mr-2 inline" />
+                  Transfer Superuser
+                </button>
+              )}
             </div>
 
             {activeTab === 'users' && <UserManagementSection />}
-            {activeTab === 'referrals' && user?.role === 'superuser' && <ReferralCodesSection />}
+            {activeTab === 'referrals' && isSuperuser && <ReferralCodesSection />}
+            {activeTab === 'ssh' && <SSHSettingsSection />}
+            {activeTab === 'transfer' && isSuperuser && <TransferSuperuserSection />}
           </div>
         </div>
       </div>
@@ -218,9 +245,9 @@ function UserManagementSection() {
       {showCreateForm && (
         <div className="border rounded-lg p-4 space-y-3 bg-muted/50">
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Email" type="email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
-            <Input placeholder="Username" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
-            <Input placeholder="Password (temp)" type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
+            <Input placeholder="Email" type="email" autoComplete="email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+            <Input placeholder="Username" autoComplete="username" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+            <Input placeholder="Password (temp)" type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
             <Input placeholder="Display name (optional)" value={newUser.display_name} onChange={(e) => setNewUser({ ...newUser, display_name: e.target.value })} />
           </div>
           <div className="flex items-center gap-3">
@@ -282,6 +309,350 @@ function UserManagementSection() {
           ))
         )}
       </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// SSH Settings Section
+// =============================================================================
+
+function SSHSettingsSection() {
+  const { token } = useAuthStore()
+  const [status, setStatus] = useState<{ enabled: boolean; port: number; username: string; token_set: boolean; token_preview: string | null; host: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [newToken, setNewToken] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const fetchStatus = useCallback(async () => {
+    if (!token) return
+    setLoading(true)
+    try {
+      const apiUrl = await getApiUrl()
+      const resp = await fetch(`${apiUrl}/api/auth/ssh/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (resp.ok) setStatus(await resp.json())
+    } catch (e) {
+      console.error('Failed to fetch SSH status:', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    fetchStatus()
+  }, [fetchStatus])
+
+  const handleReset = async () => {
+    if (!token) return
+    if (!confirm('Reset the SSH token? The current password will stop working immediately. Make sure you save the new one.')) return
+    setResetting(true)
+    setNewToken(null)
+    try {
+      const apiUrl = await getApiUrl()
+      const resp = await fetch(`${apiUrl}/api/auth/ssh/reset-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        setNewToken(data.new_token)
+        toast.success('SSH token reset â€” save it now, it won\'t be shown again')
+        fetchStatus()
+      } else {
+        const err = await resp.json()
+        toast.error(err.detail || 'Failed to reset token')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const handleToggle = async () => {
+    if (!token) return
+    setToggling(true)
+    try {
+      const apiUrl = await getApiUrl()
+      const resp = await fetch(`${apiUrl}/api/auth/ssh/toggle`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        toast.success(data.message)
+        fetchStatus()
+      } else {
+        const err = await resp.json()
+        toast.error(err.detail || 'Failed to toggle SSH')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const copyToken = () => {
+    if (newToken) {
+      navigator.clipboard.writeText(newToken)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+      toast.success('Copied to clipboard')
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <Terminal className="h-5 w-5" />
+          SSH Server Access
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Manage SSH terminal access to the Open Notebook container. Useful for MCP SSH integrations and debugging.
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="text-muted-foreground text-sm">Loading...</div>
+      ) : status ? (
+        <div className="border rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">Status</div>
+              <div className="flex items-center gap-2">
+                <Badge variant={status.enabled ? 'default' : 'destructive'}>
+                  {status.enabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+                <span className="text-xs text-muted-foreground">Port {status.port}</span>
+              </div>
+            </div>
+            <Button
+              variant={status.enabled ? 'destructive' : 'default'}
+              size="sm"
+              onClick={handleToggle}
+              disabled={toggling}
+            >
+              <Power className="h-4 w-4 mr-1" />
+              {toggling ? '...' : status.enabled ? 'Stop SSH' : 'Start SSH'}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="text-muted-foreground text-xs">Host</div>
+              <code className="text-sm">{status.host}</code>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Port</div>
+              <code className="text-sm">{status.port}</code>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Username</div>
+              <code className="text-sm">{status.username}</code>
+            </div>
+            <div>
+              <div className="text-muted-foreground text-xs">Token</div>
+              <code className="text-sm">{status.token_set ? (status.token_preview || 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢') : 'not set'}</code>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium flex items-center gap-1">
+                  <KeyRound className="h-4 w-4" />
+                  Reset SSH Token
+                </div>
+                <div className="text-xs text-muted-foreground">Generates a new random token. The old one stops working immediately.</div>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${resetting ? 'animate-spin' : ''}`} />
+                {resetting ? 'Resetting...' : 'Reset Token'}
+              </Button>
+            </div>
+
+            {newToken && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+                <div className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  âš  Save this token now â€” it will not be shown again.
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-white dark:bg-black p-2 rounded text-sm font-mono break-all">{newToken}</code>
+                  <Button variant="ghost" size="sm" onClick={copyToken} className="shrink-0">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Connect with: <code className="text-xs">ssh {status.username}@{status.host} -p {status.port}</code>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="text-muted-foreground text-sm">Failed to load SSH status</div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// Transfer Superuser Section
+// =============================================================================
+
+function TransferSuperuserSection() {
+  const { token, user } = useAuthStore()
+  const [users, setUsers] = useState<User[]>([])
+  const [targetUserId, setTargetUserId] = useState('')
+  const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [transferring, setTransferring] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    const fetchUsers = async () => {
+      try {
+        const apiUrl = await getApiUrl()
+        const resp = await fetch(`${apiUrl}/api/auth/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (resp.ok) {
+          const allUsers = await resp.json()
+          // Only show admins (transfer target must be admin)
+          setUsers(allUsers.filter((u: User) => u.role === 'admin' && u.id !== user?.id))
+        }
+      } catch (e) {
+        console.error('Failed to fetch users:', e)
+      }
+    }
+    fetchUsers()
+  }, [token, user?.id])
+
+  const handleTransfer = async () => {
+    if (!token || !targetUserId || !password || !totpCode) return
+    if (!confirm('Are you absolutely sure? You will lose superuser privileges and become an admin. This cannot be undone.')) return
+    setTransferring(true)
+    setResult(null)
+    try {
+      const apiUrl = await getApiUrl()
+      const resp = await fetch(`${apiUrl}/api/auth/transfer-superuser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          target_user_id: targetUserId,
+          password,
+          totp_code: totpCode,
+        }),
+      })
+      if (resp.ok) {
+        const data = await resp.json()
+        toast.success(data.message)
+        setResult(data.message)
+        setPassword('')
+        setTotpCode('')
+        setTargetUserId('')
+      } else {
+        const err = await resp.json()
+        toast.error(err.detail || 'Transfer failed')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold flex items-center gap-2">
+          <ArrowRightLeft className="h-5 w-5" />
+          Transfer Superuser Ownership
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          Transfer your superuser privileges to another admin. You will become an admin after the transfer.
+        </p>
+      </div>
+
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 space-y-2">
+        <div className="text-sm font-medium text-red-800 dark:text-red-200">âš  Security Requirements</div>
+        <ul className="text-xs text-red-700 dark:text-red-300 space-y-1 ml-4 list-disc">
+          <li>You must enter your current password</li>
+          <li>You must enter a valid 2FA code (2FA must be enabled on your account)</li>
+          <li>The target user must be an admin (not a regular user)</li>
+          <li>This action is irreversible â€” you cannot undo it</li>
+        </ul>
+      </div>
+
+      {users.length === 0 ? (
+        <div className="border rounded-lg p-4 text-center text-muted-foreground text-sm">
+          No admin users available for transfer. Promote a user to admin first in the Users tab.
+        </div>
+      ) : (
+        <div className="border rounded-lg p-4 space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Target Admin</label>
+            <Select value={targetUserId} onValueChange={setTargetUserId}>
+              <SelectTrigger><SelectValue placeholder="Select an admin to transfer to" /></SelectTrigger>
+              <SelectContent>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.display_name || u.username} (@{u.username})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Your Password</label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password to confirm"
+              autoComplete="current-password"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">2FA Code</label>
+            <Input
+              type="text"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit code from your authenticator app"
+              maxLength={6}
+              autoComplete="one-time-code"
+            />
+            <p className="text-xs text-muted-foreground">
+              Enable 2FA in Settings â†’ Profile if you haven't already.
+            </p>
+          </div>
+
+          <Button
+            variant="destructive"
+            onClick={handleTransfer}
+            disabled={transferring || !targetUserId || !password || totpCode.length !== 6}
+            className="w-full"
+          >
+            {transferring ? 'Transferring...' : 'Transfer Superuser Ownership'}
+          </Button>
+
+          {result && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-sm text-green-800 dark:text-green-200">
+              {result}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -429,3 +800,4 @@ function ReferralCodesSection() {
     </div>
   )
 }
+

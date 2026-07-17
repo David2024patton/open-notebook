@@ -20,6 +20,7 @@ async def get_settings():
             default_embedding_option=settings.default_embedding_option,
             auto_delete_files=settings.auto_delete_files,
             youtube_preferred_languages=settings.youtube_preferred_languages,
+            enforce_2fa=settings.enforce_2fa,
         )
     except Exception as e:
         logger.error(f"Error fetching settings: {str(e)}")
@@ -67,6 +68,12 @@ async def update_settings(settings_update: SettingsUpdate):
             settings.youtube_preferred_languages = (
                 settings_update.youtube_preferred_languages
             )
+        if settings_update.enforce_2fa is not None:
+            from typing import Literal, cast
+
+            settings.enforce_2fa = cast(
+                Literal["yes", "no"], settings_update.enforce_2fa
+            )
 
         await settings.update()
 
@@ -76,6 +83,7 @@ async def update_settings(settings_update: SettingsUpdate):
             default_embedding_option=settings.default_embedding_option,
             auto_delete_files=settings.auto_delete_files,
             youtube_preferred_languages=settings.youtube_preferred_languages,
+            enforce_2fa=settings.enforce_2fa,
         )
     except HTTPException:
         raise

@@ -64,6 +64,7 @@ export interface DiscoveredModel {
   provider: string
   model_type?: string
   description?: string
+  tags?: string[]
 }
 
 export interface RegisterModelData {

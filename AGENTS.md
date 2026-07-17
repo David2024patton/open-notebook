@@ -93,8 +93,38 @@ Applied to login, registration, profile update, and password change error handle
 - Rebuild command: `docker-compose down && docker-compose build --no-cache && docker-compose up -d`
 - Frontend runs on port 8502
 - API runs on port 5055 (internal only)
+- SSH runs on port 2222 (optional, enabled by default)
 - Users should always access via `http://localhost:8502`
 - After frontend changes, users MUST hard refresh or clear browser cache due to Next.js standalone output caching
+
+### SSH Access
+The container runs `sshd` under supervisord on port 2222, so you can SSH in alongside the web GUI:
+```bash
+ssh notebook@localhost -p 2222
+# default password: notebook
+```
+Configure via env vars in `docker-compose.yml`: `SSH_USER`, `SSH_PASSWORD`, `SSH_PORT`. For key-based auth, mount your pubkey at `/app/ssh/authorized_keys`:
+```yaml
+volumes:
+  - ./authorized_keys:/app/ssh/authorized_keys:ro
+```
+The SSH user has read access to the venv and can run `uv run python`, `git`, etc. inside the container. Useful for MCP SSH integrations and terminal debugging.
+
+## Multi-User Auth
+
+### First-User Bootstrap
+When `OPEN_NOTEBOOK_AUTH_MODE=multi-user` and no users exist yet, the first registration via `POST /api/auth/register` is auto-promoted to `superuser` and auto-approved (no referral code needed). Legacy notebooks with no `owner` field are also assigned to this first superuser at registration time. Admins can re-claim unowned notebooks later via `POST /api/auth/claim-legacy-content`.
+
+### Rate Limiting
+`api/rate_limit.py` provides `RateLimitMiddleware` — an in-memory sliding-window IP-based limiter registered in `api/main.py`. It protects `/api/auth/login`, `/api/auth/register`, `/api/auth/change-password`, `/api/auth/2fa`, and `/api/credentials/*`. Returns HTTP 429 with `Retry-After` when exceeded. Tuned for single-process deployments.
+
+### Ollama Cloud Provider
+The `ollama_cloud` provider is a distinct credential entry that maps to the same Esperanto `ollama` provider but with a remote base URL (and optional API key). Routing happens in:
+- `open_notebook/ai/models.py`: `ollama_cloud`/`ollama-cloud` → `ollama` for Esperanto
+- `open_notebook/ai/key_provider.py`: sets `OLLAMA_API_BASE` from the `ollama_cloud` credential's `base_url`
+- `open_notebook/ai/model_discovery.py`: `discover_ollama_cloud_models()` reads the cloud base URL + key from the Credential record
+- `api/credentials_service.py`: test + discover helpers for `ollama_cloud`
+- Frontend `api-keys/page.tsx`: shown under "Cloud" category, supports optional API key + `num_ctx` override
 
 ## Key Files
 
@@ -106,11 +136,34 @@ Applied to login, registration, profile update, and password change error handle
 | Runtime config | `frontend/src/app/config/route.ts` |
 | Config loader | `frontend/src/lib/config.ts` |
 | Auth router | `api/routers/auth.py` |
+| Rate limiter | `api/rate_limit.py` |
 | Base select | `frontend/src/components/ui/select.tsx` |
 | App shell | `frontend/src/components/layout/AppShell.tsx` |
 | App sidebar | `frontend/src/components/layout/AppSidebar.tsx` |
 | Top navbar | `frontend/src/components/layout/TopNavbar.tsx` |
 | Mobile nav | `frontend/src/components/layout/MobileNav.tsx` |
+
+## Model Discovery
+
+### Ollama Auto-Discovery (2026-06-16)
+
+**Problem:** Ollama models were not being discovered because:
+1. The default URL was `localhost:11434` which doesn't work from inside Docker
+2. The API response didn't include capability information
+
+**Fix:**
+- Set default URL to `http://host.docker.internal:11434` in `model_discovery.py`
+- Added `OLLAMA_API_BASE` environment variable to `docker-compose.yml`
+- Added `_extract_ollama_tags()` function to extract capabilities from Ollama API response
+- Capabilities extracted from `capabilities` array: vision→image, tools→tool, thinking→thinking
+- Family information extracted from `details.families`: moe detection
+- Tags displayed as small badges in the model discovery dialog
+
+**Key Files:**
+- `open_notebook/ai/model_discovery.py`: Ollama discovery + tag extraction
+- `api/routers/models.py`: `DiscoveredModelResponse` with tags field
+- `frontend/src/lib/api/credentials.ts`: `DiscoveredModel` interface
+- `frontend/src/app/(dashboard)/settings/api-keys/page.tsx`: Badge display
 
 ## General Principles
 
@@ -119,3 +172,4 @@ Applied to login, registration, profile update, and password change error handle
 3. **Frontend proxies through Next.js**: keep browser requests on the same origin; use rewrites for backend API.
 4. **Normalize API errors**: FastAPI `detail` can be string or array; always normalize before rendering.
 5. **Test through the proxy**: test API calls through `localhost:8502`, not just direct `localhost:5055`.
+6. **Docker network access**: Use `host.docker.internal` to reach host machine services from Docker containers.

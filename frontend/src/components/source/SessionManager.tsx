@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +12,8 @@ import {
   Edit2,
   Check,
   X,
-  Clock
+  Clock,
+  MoreVertical,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { getDateLocale } from '@/lib/utils/date-locale'
@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { BaseChatSession } from '@/lib/types/api'
 import { useModels } from '@/lib/hooks/use-models'
+import { cn } from '@/lib/utils'
 
 interface SessionManagerProps {
   sessions: BaseChatSession[]
@@ -59,7 +60,6 @@ export function SessionManager({
 
   const { data: models } = useModels()
 
-  // Helper to get model name from ID
   const customModelLabel = t('common.customModel')
   const getModelName = useMemo(() => {
     return (modelId: string) => {
@@ -103,74 +103,84 @@ export function SessionManager({
 
   return (
     <>
-      <Card className="h-full flex flex-col">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              {t('chat.sessions')}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsCreating(true)}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 p-0 min-h-0">
-          <ScrollArea className="h-full px-4">
-            {isCreating && (
-              <div className="p-3 border rounded-lg mb-3">
-                <Input
-                  value={newSessionTitle}
-                  onChange={(e) => setNewSessionTitle(e.target.value)}
-                  placeholder={t('chat.sessionTitlePlaceholder')}
-                  className="mb-2"
-                  autoFocus
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') handleCreateSession()
-                  }}
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleCreateSession}>
-                    {t('common.create')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setIsCreating(false)
-                      setNewSessionTitle('')
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </Button>
-                </div>
-              </div>
-            )}
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-muted-foreground" />
+            <h2 className="font-semibold">{t('chat.sessions')}</h2>
+          </div>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => setIsCreating(true)}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">{t('common.new')}</span>
+          </Button>
+        </div>
 
-            {loadingSessions ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {t('common.loading')}
-              </div>
-            ) : sessions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">{t('chat.noSessions')}</p>
-                <p className="text-xs mt-2">{t('chat.createToStart')}</p>
-              </div>
-            ) : (
-              <div className="space-y-2 pb-4">
-                {sessions.map((session) => (
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="p-4 space-y-2">
+              {/* Create new session form */}
+              {isCreating && (
+                <div className="p-3 rounded-lg border bg-muted/50 space-y-3">
+                  <Input
+                    value={newSessionTitle}
+                    onChange={(e) => setNewSessionTitle(e.target.value)}
+                    placeholder={t('chat.sessionTitlePlaceholder')}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateSession()
+                      if (e.key === 'Escape') {
+                        setIsCreating(false)
+                        setNewSessionTitle('')
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setIsCreating(false)
+                        setNewSessionTitle('')
+                      }}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button size="sm" onClick={handleCreateSession}>
+                      {t('common.create')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sessions list */}
+              {loadingSessions ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3" />
+                  <p className="text-sm">{t('common.loading')}</p>
+                </div>
+              ) : sessions.length === 0 && !isCreating ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm font-medium">{t('chat.noSessions')}</p>
+                  <p className="text-xs mt-1 opacity-70">{t('chat.createToStart')}</p>
+                </div>
+              ) : (
+                sessions.map((session) => (
                   <div
                     key={session.id}
-                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                    className={cn(
+                      'group p-3 rounded-lg border cursor-pointer transition-all',
                       currentSessionId === session.id
-                        ? 'bg-primary/10 border-primary'
-                        : 'hover:bg-muted'
-                    }`}
+                        ? 'bg-primary/10 border-primary/50 shadow-sm'
+                        : 'hover:bg-muted/50 hover:border-muted-foreground/20'
+                    )}
                     onClick={() => onSelectSession(session.id)}
                   >
                     {editingId === session.id ? (
@@ -178,76 +188,87 @@ export function SessionManager({
                         <Input
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyPress={(e) => {
+                          onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit()
                             if (e.key === 'Escape') handleCancelEdit()
                           }}
                           autoFocus
+                          className="h-8"
                         />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={handleSaveEdit}>
-                            <Check className="h-3 w-3" />
+                        <div className="flex gap-1.5 justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancelEdit}
+                            className="h-7 px-2"
+                          >
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={handleCancelEdit}
+                            onClick={handleSaveEdit}
+                            className="h-7 px-2"
                           >
-                            <X className="h-3 w-3" />
+                            <Check className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <div className="flex items-start justify-between mb-1">
-                          <h4 className="font-medium text-sm">
-                            {session.title}
-                          </h4>
-                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0"
-                              onClick={() => handleStartEdit(session)}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 w-6 p-0"
-                              onClick={() => setDeleteConfirmId(session.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">{session.title}</h4>
+                          <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3 flex-shrink-0" />
+                            <span>
+                              {formatDistanceToNow(new Date(session.created), {
+                                addSuffix: true,
+                                locale: getDateLocale(language)
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {session.message_count != null && session.message_count > 0 && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {t('chat.messagesCount').replace('{count}', session.message_count.toString())}
+                              </Badge>
+                            )}
+                            {session.model_override && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {getModelName(session.model_override)}
+                              </Badge>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {formatDistanceToNow(new Date(session.created), {
-                            addSuffix: true,
-                            locale: getDateLocale(language)
-                          })}
+                        <div
+                          className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={() => handleStartEdit(session)}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteConfirmId(session.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
-                        {session.message_count != null && session.message_count > 0 && (
-                          <Badge variant="secondary" className="mt-2 text-xs">
-                            {t('chat.messagesCount').replace('{count}', session.message_count.toString())}
-                          </Badge>
-                        )}
-                        {session.model_override && (
-                          <Badge variant="outline" className="mt-2 ml-2 text-xs">
-                            {getModelName(session.model_override)}
-                          </Badge>
-                        )}
-                      </>
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </ScrollArea>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <AlertDialog open={!!deleteConfirmId} onOpenChange={() => setDeleteConfirmId(null)}>
         <AlertDialogContent>

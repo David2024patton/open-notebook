@@ -7,7 +7,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -23,6 +26,7 @@ import { Settings2, Sparkles } from 'lucide-react'
 import { useModelDefaults, useModels } from '@/lib/hooks/use-models'
 import { useTranslation } from '@/lib/hooks/use-translation'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
+import { Model } from '@/lib/types/models'
 
 interface ModelSelectorProps {
   currentModel?: string
@@ -30,10 +34,53 @@ interface ModelSelectorProps {
   disabled?: boolean
 }
 
-export function ModelSelector({ 
-  currentModel, 
+function formatProviderName(provider: string): string {
+  const names: Record<string, string> = {
+    ollama: 'Ollama',
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    google: 'Google',
+    groq: 'Groq',
+    mistral: 'Mistral',
+    deepseek: 'DeepSeek',
+    azure_openai: 'Azure OpenAI',
+    openai_compatible: 'OpenAI Compatible',
+  }
+  return names[provider] || provider.charAt(0).toUpperCase() + provider.slice(1).replace(/_/g, ' ')
+}
+
+function ModelItem({ model }: { model: Model }) {
+  return (
+    <SelectItem key={model.id} value={model.id}>
+      <div className="flex items-center justify-between w-full gap-2">
+        <span className="truncate">{model.name}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {model.tags && model.tags.length > 0 && (
+            <div className="flex items-center gap-0.5">
+              {model.tags.slice(0, 3).map(tag => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="text-[9px] px-1 py-0 h-3.5 font-normal"
+                >
+                  {tag}
+                </Badge>
+              ))}
+              {model.tags.length > 3 && (
+                <span className="text-[9px] text-muted-foreground">+{model.tags.length - 3}</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </SelectItem>
+  )
+}
+
+export function ModelSelector({
+  currentModel,
   onModelChange,
-  disabled = false 
+  disabled = false
 }: ModelSelectorProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -45,15 +92,37 @@ export function ModelSelector({
     setSelectedModel(currentModel || 'default')
   }, [currentModel])
 
-  // Filter for language models only and sort by name
-  const languageModels = useMemo(() => {
+  // Filter for language models only, grouped by provider
+  const { groupedModels, providerOrder } = useMemo(() => {
     if (!models) {
-      return []
+      return { groupedModels: {}, providerOrder: [] }
     }
-    return [...models]
-      .filter((model) => model.type === 'language')
-      .sort((a, b) => a.name.localeCompare(b.name))
+
+    const languageModels = models.filter((model) => model.type === 'language')
+    const grouped: Record<string, Model[]> = {}
+    const order: string[] = []
+
+    for (const model of languageModels) {
+      const provider = model.provider || 'unknown'
+      if (!grouped[provider]) {
+        grouped[provider] = []
+        order.push(provider)
+      }
+      grouped[provider].push(model)
+    }
+
+    // Sort models within each provider alphabetically
+    for (const provider of order) {
+      grouped[provider].sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    return { groupedModels: grouped, providerOrder: order }
   }, [models])
+
+  // Flat list for current model lookup
+  const languageModels = useMemo(() => {
+    return providerOrder.flatMap(p => groupedModels[p] || [])
+  }, [groupedModels, providerOrder])
 
   const defaultModel = useMemo(() => {
     if (!defaults?.default_chat_model) return undefined
@@ -84,8 +153,8 @@ export function ModelSelector({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="sm"
           disabled={disabled}
           className="gap-2 max-w-[180px]"
@@ -96,7 +165,7 @@ export function ModelSelector({
           </span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
@@ -113,17 +182,17 @@ export function ModelSelector({
               <SelectTrigger id="model">
                 <SelectValue placeholder={t('models.selectModelPlaceholder')} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[400px]">
                 <SelectItem value="default">
                   <div className="flex items-center justify-between w-full">
                     <span>
-                      {defaultModel 
-                        ? `${t('common.default')} (${defaultModel.name})` 
+                      {defaultModel
+                        ? `${t('common.default')} (${defaultModel.name})`
                         : t('transformations.systemDefault')}
                     </span>
                     {defaultModel?.provider && (
                       <span className="text-xs text-muted-foreground ml-2">
-                        {defaultModel.provider}
+                        {formatProviderName(defaultModel.provider)}
                       </span>
                     )}
                   </div>
@@ -133,15 +202,15 @@ export function ModelSelector({
                     <LoadingSpinner size="sm" />
                   </div>
                 ) : (
-                  languageModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{model.name}</span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {model.provider}
-                        </span>
-                      </div>
-                    </SelectItem>
+                  providerOrder.map(provider => (
+                    <SelectGroup key={provider}>
+                      <SelectLabel className="text-xs font-semibold text-muted-foreground sticky top-0 bg-popover z-10">
+                        {formatProviderName(provider)}
+                      </SelectLabel>
+                      {(groupedModels[provider] || []).map(model => (
+                        <ModelItem key={model.id} model={model} />
+                      ))}
+                    </SelectGroup>
                   ))
                 )}
               </SelectContent>
@@ -151,7 +220,7 @@ export function ModelSelector({
             <div className="rounded-lg bg-muted p-3">
               <p className="text-sm text-muted-foreground">
                 {t('transformations.sessionUseReplacement').replace(
-                  '{name}', 
+                  '{name}',
                   languageModels.find(m => m.id === selectedModel)?.name || selectedModel
                 )}
               </p>

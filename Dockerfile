@@ -69,10 +69,32 @@ FROM python:3.12-slim-trixie AS runtime
 
 # Install only runtime system dependencies (no build tools)
 # Add Node.js 22.x LTS for running frontend
+# Add git for repository cloning support
+# Add openssh-server for SSH access
+# Add Playwright dependencies for browser automation
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ffmpeg \
     supervisor \
     curl \
+    git \
+    openssh-server \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -98,6 +120,9 @@ ENV VIRTUAL_ENV=/app/.venv
 # Point the app at the pre-baked tiktoken encoding (see open_notebook/config.py)
 ENV TIKTOKEN_CACHE_DIR=/app/tiktoken-cache
 
+# Install Playwright browsers
+RUN .venv/bin/playwright install chromium --with-deps
+
 # Bind Next.js to all interfaces (required for Docker networking and reverse proxies)
 ENV HOSTNAME=0.0.0.0
 # Bind the API to all interfaces (IPv4). Set API_HOST=:: for IPv6 dual-stack environments
@@ -109,8 +134,8 @@ COPY --from=builder /app/frontend/.next/static /app/frontend/.next/static
 COPY --from=builder /app/frontend/public /app/frontend/public
 COPY --from=builder /app/frontend/start-server.js /app/frontend/start-server.js
 
-# Expose ports for Frontend and API
-EXPOSE 8502 5055
+# Expose ports for Frontend, API, and SSH
+EXPOSE 8502 5055 2222
 
 RUN mkdir -p /app/data
 
@@ -123,6 +148,29 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Create log directories
 RUN mkdir -p /var/log/supervisor
+
+# ── SSH server setup ─────────────────────────────────────────────────────────
+# Runs sshd under supervisord so the container is reachable via SSH (port 2222)
+# alongside the web GUI. Useful for terminal access and MCP SSH integrations.
+# The default user is "notebook" with password "notebook" — override
+# SSH_USER / SSH_PASSWORD at runtime, or mount an authorized_keys file at
+# /app/ssh/authorized_keys to enable key-based login.
+RUN mkdir -p /run/sshd /app/ssh && \
+    # Generate host keys (needed before sshd starts)
+    ssh-keygen -A && \
+    # Create the default SSH user with a home directory and bash shell
+    useradd -m -s /bin/bash notebook && \
+    echo 'notebook:notebook' | chpasswd && \
+    # Disable DNS lookups and X11 forwarding for faster, headless sessions
+    sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
+    sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#\?UseDNS.*/UseDNS no/' /etc/ssh/sshd_config && \
+    sed -i 's/^#\?X11Forwarding.*/X11Forwarding no/' /etc/ssh/sshd_config && \
+    echo 'AllowUsers notebook' >> /etc/ssh/sshd_config
+
+# Entrypoint script rewrites the SSH user/password at runtime if env vars are set
+COPY scripts/setup-ssh.sh /app/scripts/setup-ssh.sh
+RUN chmod +x /app/scripts/setup-ssh.sh
 
 # Runtime API URL Configuration
 # The API_URL environment variable can be set at container runtime to configure

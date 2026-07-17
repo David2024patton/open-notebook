@@ -23,3 +23,6 @@ class ContentSettings(RecordModel):
         ["en", "pt", "es", "de", "nl", "en-GB", "fr", "de", "hi", "ja"],
         description="Preferred languages for YouTube transcripts",
     )
+    enforce_2fa: Optional[Literal["yes", "no"]] = Field(
+        "no", description="Require all users to enable two-factor authentication"
+    )

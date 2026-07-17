@@ -18,7 +18,9 @@ export function useAuth() {
     hasHydrated,
     authRequired,
     register,
-    authMode
+    authMode,
+    requires2FA,
+    verify2FA,
   } = useAuthStore()
 
   useEffect(() => {
@@ -72,20 +74,33 @@ export function useAuth() {
   }
 
   const handleRegister = async (
-    username: string,
+    email: string,
     password: string,
-    email?: string,
     name?: string,
     referralCode?: string
   ) => {
-    const result = await register(username, password, email, name, referralCode)
+    const result = await register(email, password, name, referralCode)
     if (result.autoApproved) {
-      const success = await login(email || '', password)
+      const success = await login(email, password)
       if (success) {
         router.push('/notebooks')
       }
     }
     return result
+  }
+
+  const handleVerify2FA = async (code: string) => {
+    const success = await verify2FA(code)
+    if (success) {
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+      if (redirectPath) {
+        sessionStorage.removeItem('redirectAfterLogin')
+        router.push(redirectPath)
+      } else {
+        router.push('/notebooks')
+      }
+    }
+    return success
   }
 
   const handleLogout = () => {
@@ -106,6 +121,8 @@ export function useAuth() {
     },
     register: handleRegister,
     logout: handleLogout,
-    authMode
+    authMode,
+    requires2FA,
+    verify2FA: handleVerify2FA,
   }
 }

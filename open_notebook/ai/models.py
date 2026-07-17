@@ -18,11 +18,12 @@ ModelType = Union[LanguageModel, EmbeddingModel, SpeechToTextModel, TextToSpeech
 
 class Model(ObjectModel):
     table_name: ClassVar[str] = "model"
-    nullable_fields: ClassVar[set[str]] = {"credential"}
+    nullable_fields: ClassVar[set[str]] = {"credential", "tags"}
     name: str
     provider: str
     type: str
     credential: Optional[str] = None
+    tags: Optional[list[str]] = None
 
     @classmethod
     async def get_models_by_type(cls, model_type):
@@ -151,6 +152,11 @@ class ModelManager:
         local_llm_providers = ["lmstudio", "lm-studio", "jan", "gpt4all", "localai", "llamacpp", "llama-cpp", "koboldcpp", "kobold-cpp", "vllm", "v-llm", "textgenwebui", "textgen-webui"]
         if provider.lower() in local_llm_providers:
             provider = "openai-compatible"
+
+        # Route ollama_cloud to the same Esperanto "ollama" provider; the
+        # remote base URL is injected via OLLAMA_API_BASE by the key provider.
+        if provider.lower() == "ollama-cloud" or provider.lower() == "ollama_cloud":
+            provider = "ollama"
 
         # Create model based on type (Esperanto will cache the instance)
         if model.type == "language":

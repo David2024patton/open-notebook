@@ -138,12 +138,14 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
               placeholder="Current password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
             />
             <Input
               type="password"
               placeholder="New password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
             />
             <Button
               variant="outline"

@@ -40,6 +40,7 @@ class DiscoveredModelResponse(BaseModel):
     provider: str
     model_type: str
     description: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class ProviderSyncResponse(BaseModel):
@@ -184,6 +185,7 @@ async def get_models(
                 provider=model.provider,
                 type=model.type,
                 credential=model.credential,
+                tags=model.tags,
                 created=str(model.created),
                 updated=str(model.updated),
             )
@@ -237,6 +239,7 @@ async def create_model(model_data: ModelCreate):
             provider=new_model.provider,
             type=new_model.type,
             credential=new_model.credential,
+            tags=new_model.tags,
             created=str(new_model.created),
             updated=str(new_model.updated),
         )
@@ -383,6 +386,7 @@ async def get_provider_availability():
             "elevenlabs": "ELEVENLABS_API_KEY",
             "deepgram": "DEEPGRAM_API_KEY",
             "ollama": "OLLAMA_API_BASE",
+            "ollama_cloud": "OLLAMA_CLOUD_BASE_URL",
             "dashscope": "DASHSCOPE_API_KEY",
             "minimax": "MINIMAX_API_KEY",
         }
@@ -509,6 +513,7 @@ async def discover_models(provider: str):
                 provider=m.provider,
                 model_type=m.model_type,
                 description=m.description,
+                tags=m.tags,
             )
             for m in discovered
         ]
@@ -629,6 +634,7 @@ async def get_models_by_provider(provider: str):
                 provider=model.get("provider", ""),
                 type=model.get("type", ""),
                 credential=model.get("credential"),
+                tags=model.get("tags"),
                 created=str(model.get("created", "")),
                 updated=str(model.get("updated", "")),
             )

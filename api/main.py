@@ -14,9 +14,11 @@ from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth import AuthMiddleware
+from api.rate_limit import RateLimitMiddleware
 from api.routers import (
     artifacts,
     auth,
+    browser,
     chat,
     chat_sessions,
     config,
@@ -207,6 +209,31 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Podcast profile migration encountered errors: {e}")
         # Non-fatal: profiles can be migrated manually via UI
 
+    # Auto-sync models from all configured providers on startup
+    try:
+        import asyncio
+        from open_notebook.ai.model_discovery import sync_provider_models
+        from open_notebook.domain.credential import Credential
+
+        async def _startup_sync():
+            try:
+                # Get all credentials and sync each provider with its credential ID
+                credentials = await Credential.get_all()
+                for cred in credentials:
+                    if cred.provider:
+                        await sync_provider_models(
+                            cred.provider,
+                            auto_register=True,
+                            credential_id=cred.id,
+                        )
+                        logger.info(f"Startup model sync: synced {cred.provider} models")
+            except Exception as e:
+                logger.warning(f"Startup model sync failed: {e}")
+
+        asyncio.create_task(_startup_sync())
+    except Exception as e:
+        logger.warning(f"Could not start model sync: {e}")
+
     logger.success("API initialization completed successfully")
 
     # Yield control to the application
@@ -232,6 +259,9 @@ if CORS_IS_DEFAULT_WILDCARD:
 else:
     logger.info(f"CORS allowed origins: {CORS_ALLOWED_ORIGINS}")
 
+# Add rate limiting middleware (runs before auth so 429s short-circuit)
+app.add_middleware(RateLimitMiddleware)
+
 # Add authentication middleware first
 # Supports both single-password and multi-user modes via OPEN_NOTEBOOK_AUTH_MODE
 app.add_middleware(
@@ -244,8 +274,10 @@ app.add_middleware(
         "/redoc",
         "/api/auth/status",
         "/api/auth/login",
+        "/api/auth/login/2fa",
         "/api/auth/register",
         "/api/config",
+        "/api/browser/status",
     ],
 )
 
@@ -387,6 +419,7 @@ app.include_router(chat_sessions.router, prefix="/api", tags=["chat-sessions"])
 app.include_router(modes.router, prefix="/api", tags=["modes"])
 app.include_router(sandbox.router, prefix="/api", tags=["sandbox"])
 app.include_router(side_by_side.router, prefix="/api", tags=["side-by-side"])
+app.include_router(browser.router, prefix="/api", tags=["browser"])
 
 
 @app.get("/")

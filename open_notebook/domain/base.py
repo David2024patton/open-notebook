@@ -144,13 +144,6 @@ class ObjectModel(BaseModel):
         return None
 
     async def save(self) -> None:
-        """
-        Save the model to the database.
-
-        Note: Embedding is no longer generated inline. Subclasses that need
-        embedding should override save() to submit the appropriate embed_*
-        command after calling super().save().
-        """
         try:
             self.model_validate(self.model_dump(), strict=True)
             data = self._prepare_save_data()
@@ -194,11 +187,12 @@ class ObjectModel(BaseModel):
 
     def _prepare_save_data(self) -> Dict[str, Any]:
         data = self.model_dump()
-        return {
+        result = {
             key: value
             for key, value in data.items()
             if value is not None or key in self.__class__.nullable_fields
         }
+        return result
 
     async def delete(self) -> bool:
         if self.id is None:

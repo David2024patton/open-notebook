@@ -27,6 +27,7 @@ class DiscoveredModel:
     provider: str
     model_type: str  # language, embedding, speech_to_text, text_to_speech
     description: Optional[str] = None
+    tags: Optional[List[str]] = None  # capability tags like "image", "tool", "thinking", "moe"
 
 
 # =============================================================================
@@ -294,16 +295,63 @@ async def discover_google_models() -> List[DiscoveredModel]:
 
 async def discover_ollama_models() -> List[DiscoveredModel]:
     """Fetch available models from local Ollama instance."""
-    base_url = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
+    base_url = os.environ.get("OLLAMA_API_BASE", "http://host.docker.internal:11434")
     if not base_url:
         return []
 
-    models = []
+    return await _discover_ollama_models_from(base_url, provider_name="ollama")
+
+
+async def discover_ollama_cloud_models() -> List[DiscoveredModel]:
+    """Fetch available models from a remote/cloud Ollama endpoint.
+
+    Uses the base_url (and optional API key) stored on the ollama_cloud
+    Credential record. Falls back to the OLLAMA_CLOUD_BASE_URL env var.
+    """
+    base_url = None
+    api_key = None
+
+    try:
+        credentials = await Credential.get_by_provider("ollama_cloud")
+        if credentials:
+            cred = credentials[0]
+            config = cred.to_esperanto_config()
+            base_url = config.get("base_url")
+            api_key = config.get("api_key")
+    except Exception as e:
+        logger.warning(f"Failed to read ollama_cloud config from Credential: {e}")
+
+    if not base_url:
+        base_url = os.environ.get("OLLAMA_CLOUD_BASE_URL", "").rstrip("/")
+    if not api_key:
+        api_key = os.environ.get("OLLAMA_CLOUD_API_KEY")
+
+    if not base_url:
+        logger.warning("No base_url configured for ollama_cloud provider")
+        return []
+
+    return await _discover_ollama_models_from(
+        base_url, provider_name="ollama_cloud", api_key=api_key
+    )
+
+
+async def _discover_ollama_models_from(
+    base_url: str, provider_name: str = "ollama", api_key: Optional[str] = None
+) -> List[DiscoveredModel]:
+    """Shared helper for discovering models from any Ollama-compatible endpoint."""
+    if not base_url:
+        return []
+
+    models: List[DiscoveredModel] = []
     try:
         async with httpx.AsyncClient() as client:
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
             response = await client.get(
-                f"{base_url}/api/tags",
-                timeout=10.0,
+                f"{base_url.rstrip('/')}/api/tags",
+                headers=headers,
+                timeout=15.0,
             )
             response.raise_for_status()
             data = response.json()
@@ -312,17 +360,60 @@ async def discover_ollama_models() -> List[DiscoveredModel]:
                 model_name = model.get("name", "")
                 if model_name:
                     model_type = classify_model_type(model_name, "ollama")
+                    tags = _extract_ollama_tags(model)
                     models.append(
                         DiscoveredModel(
                             name=model_name,
-                            provider="ollama",
+                            provider=provider_name,
                             model_type=model_type,
+                            tags=tags,
                         )
                     )
     except Exception as e:
-        logger.warning(f"Failed to discover Ollama models: {e}")
+        logger.warning(f"Failed to discover Ollama models from {base_url}: {e}")
 
     return models
+
+
+def _extract_ollama_tags(model_data: dict) -> List[str]:
+    """Extract capability tags from an Ollama model response."""
+    tags = []
+
+    # Extract from capabilities array
+    capabilities = model_data.get("capabilities", [])
+    for cap in capabilities:
+        cap_lower = cap.lower()
+        if cap_lower == "vision":
+            tags.append("image")
+        elif cap_lower == "tools":
+            tags.append("tool")
+        elif cap_lower == "thinking":
+            tags.append("thinking")
+        elif cap_lower in ("completion", "embedding"):
+            tags.append(cap_lower)
+
+    # Extract from details.families array
+    details = model_data.get("details", {})
+    families = details.get("families", [])
+    for family in families:
+        family_lower = family.lower()
+        if family_lower == "moe" or "moe" in family_lower:
+            tags.append("moe")
+        elif family_lower not in ("llama", "gemma", "qwen", "mistral", "deepseek"):
+            # Add family as a tag if it's not a common base
+            if family_lower not in [t.lower() for t in tags]:
+                tags.append(family_lower)
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_tags = []
+    for tag in tags:
+        tag_lower = tag.lower()
+        if tag_lower not in seen:
+            seen.add(tag_lower)
+            unique_tags.append(tag)
+
+    return unique_tags if unique_tags else None
 
 
 async def discover_groq_models() -> List[DiscoveredModel]:
@@ -829,6 +920,7 @@ PROVIDER_DISCOVERY_FUNCTIONS = {
     "anthropic": discover_anthropic_models,
     "google": discover_google_models,
     "ollama": discover_ollama_models,
+    "ollama_cloud": discover_ollama_cloud_models,
     "groq": discover_groq_models,
     "mistral": discover_mistral_models,
     "deepseek": discover_deepseek_models,
@@ -879,7 +971,7 @@ async def discover_provider_models(provider: str) -> List[DiscoveredModel]:
 
 
 async def sync_provider_models(
-    provider: str, auto_register: bool = True
+    provider: str, auto_register: bool = True, credential_id: Optional[str] = None
 ) -> Tuple[int, int, int]:
     """
     Sync models for a provider: discover and optionally register in database.
@@ -887,6 +979,7 @@ async def sync_provider_models(
     Args:
         provider: Provider name
         auto_register: If True, automatically create Model records in database
+        credential_id: Optional credential ID to link to models
 
     Returns:
         Tuple of (discovered_count, new_count, existing_count)
@@ -922,6 +1015,23 @@ async def sync_provider_models(
 
         # Check if model already exists using pre-fetched data
         if model_key in existing_keys:
+            # Update tags and credential for existing model
+            if model.tags or credential_id:
+                try:
+                    # Use Model domain to properly handle record references
+                    existing = await repo_query(
+                        "SELECT * FROM model WHERE string::lowercase(provider) = $provider AND string::lowercase(name) = $name AND string::lowercase(type) = $type LIMIT 1",
+                        {"provider": provider.lower(), "name": model.name.lower(), "type": model.model_type.lower()},
+                    )
+                    if existing:
+                        model_obj = Model(**existing[0])
+                        if model.tags:
+                            model_obj.tags = model.tags
+                        if credential_id:
+                            model_obj.credential = credential_id
+                        await model_obj.save()
+                except Exception as e:
+                    logger.warning(f"Failed to update tags for {model.name}: {e}")
             existing_count += 1
             continue
 
@@ -931,6 +1041,8 @@ async def sync_provider_models(
                 name=model.name,
                 provider=model.provider,
                 type=model.model_type,
+                tags=model.tags,
+                credential=credential_id,
             )
             await new_model.save()
             new_count += 1

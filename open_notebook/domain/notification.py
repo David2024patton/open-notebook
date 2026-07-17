@@ -194,8 +194,8 @@ async def notify_admins_of_signup(
 
         # Superuser gets all signup notifications
         if recipient_role == "superuser":
-            title = "New User Signed Up"
-            msg = f"{new_user_name} ({new_user_role}) has created an account."
+            title = "New Signup Request"
+            msg = f"{new_user_name} ({new_user_role}) has submitted a signup request and needs approval."
             if referrer_name:
                 msg += f" Referred by {referrer_name}."
             await create_notification(
@@ -208,8 +208,8 @@ async def notify_admins_of_signup(
 
         # Admin gets notified of user signups only (not superuser signups)
         elif recipient_role == "admin" and new_user_role != "superuser":
-            title = "New User Signed Up"
-            msg = f"{new_user_name} ({new_user_role}) has created an account."
+            title = "New Signup Request"
+            msg = f"{new_user_name} ({new_user_role}) has submitted a signup request and needs approval."
             if referrer_name:
                 msg += f" Referred by {referrer_name}."
             await create_notification(

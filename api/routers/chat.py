@@ -1,5 +1,6 @@
 import asyncio
 import traceback
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -75,6 +76,12 @@ class ExecuteChatRequest(BaseModel):
 class ExecuteChatResponse(BaseModel):
     session_id: str = Field(..., description="Session ID")
     messages: List[ChatMessage] = Field(..., description="Updated message list")
+
+
+class SendToChatRequest(BaseModel):
+    notebook_id: str = Field(..., description="Notebook ID")
+    message: str = Field(..., description="Message text")
+    image: Optional[str] = Field(None, description="Base64 encoded annotated screenshot (data URI)")
 
 
 class BuildContextRequest(BaseModel):
@@ -528,3 +535,41 @@ async def build_context(request: BuildContextRequest):
     except Exception as e:
         logger.error(f"Error building context: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error building context: {str(e)}")
+
+
+@router.post("/chat/send", response_model=SuccessResponse)
+async def send_to_chat(request: SendToChatRequest):
+    """Save an annotated screenshot as a note in the notebook."""
+    try:
+        notebook = await Notebook.get(request.notebook_id)
+        if not notebook:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+
+        content_parts = [request.message]
+        metadata = {}
+
+        if request.image:
+            metadata["has_image"] = True
+            metadata["image_type"] = "annotated_screenshot"
+            if request.image.startswith("data:"):
+                content_parts.append("[Annotated screenshot attached]")
+
+        note_content = "\n\n".join(content_parts)
+
+        note = Note(
+            title=f"Browser Annotation - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
+            content=note_content,
+        )
+        await note.save()
+
+        await notebook.add_note(str(note.id))
+
+        return SuccessResponse(
+            success=True,
+            message="Annotated screenshot saved as note",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending to chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error sending to chat: {str(e)}")

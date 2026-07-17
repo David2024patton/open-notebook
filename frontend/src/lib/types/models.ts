@@ -4,6 +4,7 @@ export interface Model {
   provider: string
   type: 'language' | 'embedding' | 'text_to_speech' | 'speech_to_text'
   credential?: string | null
+  tags?: string[]
   created: string
   updated: string
 }

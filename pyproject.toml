@@ -43,8 +43,11 @@ dependencies = [
     "babel>=2.18.0",
     "pyjwt>=2.8.0",
     "bcrypt>=4.1.2",
+    "pyotp>=2.9.0",
+    "qrcode[pil]>=7.4",
     "markdown>=3.7",
     "yfinance>=0.2.40",
+    "playwright>=1.40.0",
 ]
 
 [tool.setuptools]

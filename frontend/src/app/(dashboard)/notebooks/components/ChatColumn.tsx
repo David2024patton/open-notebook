@@ -10,6 +10,8 @@ import { AlertCircle } from 'lucide-react'
 import { ContextSelections } from '../[id]/page'
 import { useTranslation } from '@/lib/hooks/use-translation'
 import { SourceListResponse } from '@/lib/types/api'
+import { useNotebookColumnsStore } from '@/lib/stores/notebook-columns-store'
+import { createCollapseButton } from '@/components/notebooks/CollapsibleColumn'
 
 interface ChatColumnProps {
   notebookId: string
@@ -20,6 +22,12 @@ interface ChatColumnProps {
 
 export function ChatColumn({ notebookId, contextSelections, sources, sourcesLoading }: ChatColumnProps) {
   const { t } = useTranslation()
+  const { toggleChat } = useNotebookColumnsStore()
+
+  const collapseButton = useMemo(
+    () => createCollapseButton(toggleChat, t('common.chat')),
+    [toggleChat, t]
+  )
 
   // Fetch notes for this notebook
   const { data: notes = [], isLoading: notesLoading } = useNotes(notebookId)
@@ -92,24 +100,29 @@ export function ChatColumn({ notebookId, contextSelections, sources, sourcesLoad
   }
 
   return (
-    <ChatPanel
-      title={t('chat.chatWithNotebook')}
-      contextType="notebook"
-      messages={chat.messages}
-      isStreaming={chat.isSending}
-      contextIndicators={null}
-      onSendMessage={(message, modelOverride) => chat.sendMessage(message, modelOverride)}
-      modelOverride={chat.currentSession?.model_override ?? chat.pendingModelOverride ?? undefined}
-      onModelChange={(model) => chat.setModelOverride(model ?? null)}
-      sessions={chat.sessions}
-      currentSessionId={chat.currentSessionId}
-      onCreateSession={(title) => chat.createSession(title)}
-      onSelectSession={chat.switchSession}
-      onUpdateSession={(sessionId, title) => chat.updateSession(sessionId, { title })}
-      onDeleteSession={chat.deleteSession}
-      loadingSessions={chat.loadingSessions}
-      notebookContextStats={contextStats}
-      notebookId={notebookId}
-    />
+    <div className="relative h-full">
+      <div className="absolute top-2 right-2 z-10">
+        {collapseButton}
+      </div>
+      <ChatPanel
+        title={t('chat.chatWithNotebook')}
+        contextType="notebook"
+        messages={chat.messages}
+        isStreaming={chat.isSending}
+        contextIndicators={null}
+        onSendMessage={(message, modelOverride) => chat.sendMessage(message, modelOverride)}
+        modelOverride={chat.currentSession?.model_override ?? chat.pendingModelOverride ?? undefined}
+        onModelChange={(model) => chat.setModelOverride(model ?? null)}
+        sessions={chat.sessions}
+        currentSessionId={chat.currentSessionId}
+        onCreateSession={(title) => chat.createSession(title)}
+        onSelectSession={chat.switchSession}
+        onUpdateSession={(sessionId, title) => chat.updateSession(sessionId, { title })}
+        onDeleteSession={chat.deleteSession}
+        loadingSessions={chat.loadingSessions}
+        notebookContextStats={contextStats}
+        notebookId={notebookId}
+      />
+    </div>
   )
 }

@@ -22,6 +22,7 @@ services:
     ports:
       - "8502:8502"  # Web UI
       - "5055:5055"  # REST API
+      - "2222:2222"  # SSH
     environment:
       # REQUIRED: Change this to your own secret string
       # This encrypts your API keys in the database
@@ -31,6 +32,14 @@ services:
       - OPEN_NOTEBOOK_AUTH_MODE=multi-user
       - JWT_SECRET_KEY=super-secret-jwt-key-for-open-notebook-multi-user-2024
       - JWT_EXPIRATION_HOURS=24
+
+      # SSH access (optional — change credentials in production!)
+      - SSH_USER=notebook
+      - SSH_PASSWORD=notebook
+      - SSH_PORT=2222
+
+      # Ollama endpoint (host machine)
+      - OLLAMA_API_BASE=http://host.docker.internal:11434
 
       # Database connection. SURREAL_USER / SURREAL_PASSWORD default to root:root
       # for local use; override them in a .env file before exposing the instance
@@ -42,6 +51,9 @@ services:
       - SURREAL_DATABASE=open_notebook
     volumes:
       - ./notebook_data:/app/data
+      # Optional: mount your SSH public key for key-based auth
+      # Create a file named authorized_keys with your pubkey, then uncomment:
+      # - ./authorized_keys:/app/ssh/authorized_keys:ro
     depends_on:
       - surrealdb
     restart: always

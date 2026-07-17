@@ -74,6 +74,7 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   elevenlabs: 'ElevenLabs',
   deepgram: 'Deepgram',
   ollama: 'Ollama',
+  ollama_cloud: 'Ollama (Cloud)',
   azure: 'Azure OpenAI',
   vertex: 'Google Vertex AI',
   openai_compatible: 'OpenAI Compatible',
@@ -107,6 +108,7 @@ const PROVIDER_CATEGORIES: Record<string, string> = {
   azure: 'Cloud',
   vertex: 'Cloud',
   ollama: 'Local',
+  ollama_cloud: 'Cloud',
   openai_compatible: 'Local',
   lmstudio: 'Local',
   jan: 'Local',
@@ -124,11 +126,13 @@ const ALL_PROVIDERS = [
   'xai', 'openrouter', 'dashscope', 'minimax', 'voyage', 'elevenlabs', 'deepgram',
   'azure', 'vertex',
   'ollama', 'lmstudio', 'jan', 'gpt4all', 'localai', 'llamacpp', 'koboldcpp', 'vllm', 'textgenwebui', 'openai_compatible',
+  'ollama_cloud',
 ]
 
 // Local LLM provider default base URLs
 const LOCAL_LLM_DEFAULTS: Record<string, { baseUrl: string; description: string; port: number }> = {
   ollama: { baseUrl: 'http://localhost:11434', description: 'Local models via Ollama', port: 11434 },
+  ollama_cloud: { baseUrl: '', description: 'Remote Ollama endpoint (e.g. Ollama Cloud, Runpod). Enter the full URL.', port: 0 },
   lmstudio: { baseUrl: 'http://localhost:1234/v1', description: 'Local models via LM Studio', port: 1234 },
   jan: { baseUrl: 'http://localhost:1337/v1', description: 'Local models via Jan', port: 1337 },
   gpt4all: { baseUrl: 'http://localhost:4891/v1', description: 'Local models via GPT4All', port: 4891 },
@@ -154,6 +158,7 @@ const PROVIDER_MODALITIES: Record<string, ModelType[]> = {
   elevenlabs: ['text_to_speech', 'speech_to_text'],
   deepgram: ['text_to_speech'],
   ollama: ['language', 'embedding'],
+  ollama_cloud: ['language', 'embedding'],
   azure: ['language', 'embedding', 'text_to_speech', 'speech_to_text'],
   vertex: ['language', 'embedding', 'text_to_speech'],
   openai_compatible: ['language', 'embedding', 'text_to_speech', 'speech_to_text'],
@@ -188,6 +193,7 @@ const PROVIDER_DOCS: Record<string, string> = {
   dashscope: 'https://help.aliyun.com/zh/model-studio/getting-started/',
   minimax: 'https://platform.minimaxi.com/document/Guides',
   ollama: 'https://ollama.com',
+  ollama_cloud: 'https://ollama.com/cloud',
   lmstudio: 'https://lmstudio.ai',
   jan: 'https://jan.ai',
   gpt4all: 'https://gpt4all.io',
@@ -244,8 +250,9 @@ function CredentialFormDialog({
 
   const isVertex = provider === 'vertex'
   const isOllama = provider === 'ollama'
+  const isOllamaCloud = provider === 'ollama_cloud'
   const isOpenAICompatible = provider === 'openai_compatible'
-  const isLocalLLM = provider in LOCAL_LLM_DEFAULTS && provider !== 'openai_compatible'
+  const isLocalLLM = provider in LOCAL_LLM_DEFAULTS && provider !== 'openai_compatible' && provider !== 'ollama_cloud'
   const requiresApiKey = !isVertex && !isOllama && !isOpenAICompatible && !isLocalLLM
 
   const [name, setName] = useState('')
@@ -299,7 +306,7 @@ function CredentialFormDialog({
         if (location !== (credential.location || '')) data.location = location.trim() || undefined
         if (credentialsPath !== (credential.credentials_path || '')) data.credentials_path = credentialsPath.trim() || undefined
       }
-      if (isOllama && numCtx !== (credential.num_ctx ? String(credential.num_ctx) : '')) {
+      if ((isOllama || isOllamaCloud) && numCtx !== (credential.num_ctx ? String(credential.num_ctx) : '')) {
         // empty clears the override (0 -> backend resets to default)
         data.num_ctx = numCtx.trim() ? Number(numCtx) : 0
       }
@@ -317,7 +324,7 @@ function CredentialFormDialog({
         data.location = location.trim() || undefined
         data.credentials_path = credentialsPath.trim() || undefined
       }
-      if (isOllama && numCtx.trim()) {
+      if ((isOllama || isOllamaCloud) && numCtx.trim()) {
         data.num_ctx = Number(numCtx)
       }
       createCredential.mutate(data, { onSuccess })
@@ -446,6 +453,11 @@ function CredentialFormDialog({
                 placeholder={LOCAL_LLM_DEFAULTS[provider]?.baseUrl || (isOllama ? 'http://localhost:11434' : 'https://api.example.com/v1')}
                 disabled={isSubmitting}
               />
+              {isOllamaCloud && (
+                <p className="text-xs text-muted-foreground">
+                  Enter the full URL of your remote Ollama endpoint (e.g. <code className="bg-muted px-1 py-0.5 rounded">https://your-cloud-host:11434</code>).
+                </p>
+              )}
               {isLocalLLM && LOCAL_LLM_DEFAULTS[provider]?.description && (
                 <p className="text-xs text-muted-foreground">{LOCAL_LLM_DEFAULTS[provider].description}</p>
               )}
@@ -459,8 +471,8 @@ function CredentialFormDialog({
             </div>
           )}
 
-          {/* num_ctx (Ollama only) */}
-          {isOllama && (
+          {/* num_ctx (Ollama / Ollama Cloud) */}
+          {(isOllama || isOllamaCloud) && (
             <div className="space-y-2">
               <Label htmlFor="num-ctx" className="text-muted-foreground">
                 {t('apiKeys.numCtx')}
@@ -704,6 +716,19 @@ function DiscoverModelsDialog({
                     className="rounded"
                   />
                   <span className="truncate">{model.name}</span>
+                  {model.tags && model.tags.length > 0 && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {model.tags.map(tag => (
+                        <Badge
+                          key={tag}
+                          variant="secondary"
+                          className="text-[10px] px-1 py-0 h-4 font-normal"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   {model.description && model.description !== model.name && (
                     <span className="text-xs text-muted-foreground truncate">({model.description})</span>
                   )}
@@ -1313,7 +1338,25 @@ function DefaultModelSelectors({
                     <SelectContent>
                       {available.sort((a, b) => a.name.localeCompare(b.name)).map(model => (
                         <SelectItem key={model.id} value={model.id}>
-                          <span className="truncate">{model.name}</span>
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="truncate">{model.name}</span>
+                            {model.tags && model.tags.length > 0 && (
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                {model.tags.slice(0, 2).map(tag => (
+                                  <Badge
+                                    key={tag}
+                                    variant="secondary"
+                                    className="text-[9px] px-1 py-0 h-3.5 font-normal"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {model.tags.length > 2 && (
+                                  <span className="text-[9px] text-muted-foreground">+{model.tags.length - 2}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1362,7 +1405,25 @@ function DefaultModelSelectors({
                         <SelectContent>
                           {available.sort((a, b) => a.name.localeCompare(b.name)).map(model => (
                             <SelectItem key={model.id} value={model.id}>
-                              <span className="truncate">{model.name}</span>
+                              <div className="flex items-center justify-between w-full gap-2">
+                                <span className="truncate">{model.name}</span>
+                                {model.tags && model.tags.length > 0 && (
+                                  <div className="flex items-center gap-0.5 shrink-0">
+                                    {model.tags.slice(0, 2).map(tag => (
+                                      <Badge
+                                        key={tag}
+                                        variant="secondary"
+                                        className="text-[9px] px-1 py-0 h-3.5 font-normal"
+                                      >
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                    {model.tags.length > 2 && (
+                                      <span className="text-[9px] text-muted-foreground">+{model.tags.length - 2}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>

@@ -7,7 +7,7 @@ import { getApiUrl } from '@/lib/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Upload, Check, Palette } from 'lucide-react'
+import { ArrowLeft, Upload, Check, Palette, Shield, ShieldCheck, ShieldOff, Copy, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -56,7 +56,7 @@ interface UserProfile {
 }
 
 export default function ProfileSettingsPage() {
-  const { token, user } = useAuthStore()
+  const { token, user, enforce2FA } = useAuthStore()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
@@ -67,8 +67,17 @@ export default function ProfileSettingsPage() {
   const [avatarType, setAvatarType] = useState<'initials' | 'dicebear' | 'upload'>('initials')
   const [selectedStyle, setSelectedStyle] = useState('adventurer')
   const [isSaving, setIsSaving] = useState(false)
-  const [activeSection, setActiveSection] = useState<'avatar' | 'profile' | 'password'>('avatar')
+  const [activeSection, setActiveSection] = useState<'avatar' | 'profile' | 'security'>('avatar')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 2FA state
+  const [totpEnabled, setTotpEnabled] = useState(false)
+  const [totpConfigured, setTotpConfigured] = useState(false)
+  const [totpSecret, setTotpSecret] = useState('')
+  const [totpQrCode, setTotpQrCode] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [totpLoading, setTotpLoading] = useState(false)
+  const [showTotpSecret, setShowTotpSecret] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -88,6 +97,27 @@ export default function ProfileSettingsPage() {
       }
     }
   }, [user])
+
+  // Fetch 2FA status on mount
+  useEffect(() => {
+    const fetch2FAStatus = async () => {
+      if (!token) return
+      try {
+        const apiUrl = await getApiUrl()
+        const res = await fetch(`${apiUrl}/api/auth/2fa/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setTotpEnabled(data.enabled)
+          setTotpConfigured(data.configured)
+        }
+      } catch {
+        // Silently fail
+      }
+    }
+    fetch2FAStatus()
+  }, [token])
 
   const getAvatarUrl = () => {
     if (avatarType === 'dicebear') {
@@ -203,6 +233,99 @@ export default function ProfileSettingsPage() {
     }
   }
 
+  // 2FA Setup
+  const setup2FA = async () => {
+    if (!token) return
+    setTotpLoading(true)
+    try {
+      const apiUrl = await getApiUrl()
+      const res = await fetch(`${apiUrl}/api/auth/2fa/setup`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setTotpSecret(data.secret)
+        setTotpQrCode(data.qr_code)
+        setTotpConfigured(true)
+        toast.success('Scan the QR code with your authenticator app')
+      } else {
+        const data = await res.json()
+        toast.error(data.detail || 'Failed to setup 2FA')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setTotpLoading(false)
+    }
+  }
+
+  // 2FA Verify & Enable
+  const verify2FA = async () => {
+    if (!token || !totpCode) {
+      toast.error('Please enter the 6-digit code')
+      return
+    }
+    setTotpLoading(true)
+    try {
+      const apiUrl = await getApiUrl()
+      const res = await fetch(`${apiUrl}/api/auth/2fa/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: totpCode }),
+      })
+      if (res.ok) {
+        setTotpEnabled(true)
+        setTotpCode('')
+        toast.success('Two-factor authentication enabled!')
+      } else {
+        const data = await res.json()
+        toast.error(data.detail || 'Invalid code')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setTotpLoading(false)
+    }
+  }
+
+  // 2FA Disable
+  const disable2FA = async () => {
+    if (!token || !currentPassword) {
+      toast.error('Please enter your current password to disable 2FA')
+      return
+    }
+    setTotpLoading(true)
+    try {
+      const apiUrl = await getApiUrl()
+      const res = await fetch(`${apiUrl}/api/auth/2fa/disable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ current_password: currentPassword }),
+      })
+      if (res.ok) {
+        setTotpEnabled(false)
+        setTotpConfigured(false)
+        setTotpSecret('')
+        setTotpQrCode('')
+        setCurrentPassword('')
+        toast.success('Two-factor authentication disabled')
+      } else {
+        const data = await res.json()
+        toast.error(data.detail || 'Failed to disable 2FA')
+      }
+    } catch {
+      toast.error('Network error')
+    } finally {
+      setTotpLoading(false)
+    }
+  }
+
+  const copyTotpSecret = () => {
+    navigator.clipboard.writeText(totpSecret)
+    toast.success('Secret copied to clipboard')
+  }
+
   const avatarUrl = getAvatarUrl()
   const initials = getInitials()
 
@@ -243,16 +366,34 @@ export default function ProfileSettingsPage() {
                 Profile
               </button>
               <button
-                onClick={() => setActiveSection('password')}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeSection === 'password'
+                onClick={() => setActiveSection('security')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+                  activeSection === 'security'
                     ? 'border-foreground text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Password
+                <Shield className="h-3.5 w-3.5" />
+                Security
               </button>
             </div>
+
+            {/* 2FA Enforcement Warning */}
+            {enforce2FA && !totpEnabled && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <Shield className="h-5 w-5 text-amber-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-amber-600 dark:text-amber-400">
+                      Two-Factor Authentication Required
+                    </p>
+                    <p className="text-sm text-amber-600/80 dark:text-amber-400/80 mt-1">
+                      Your administrator requires 2FA to be enabled. Please set it up in the Security tab below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {activeSection === 'avatar' && (
               <div className="space-y-6">
@@ -389,29 +530,138 @@ export default function ProfileSettingsPage() {
               </div>
             )}
 
-            {activeSection === 'password' && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                  />
+            {activeSection === 'security' && (
+              <div className="space-y-8">
+                {/* Password Change Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold">Change Password</h3>
+                  <div>
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <Button onClick={changePassword} disabled={isSaving}>
+                    {isSaving ? 'Changing...' : 'Change Password'}
+                  </Button>
                 </div>
-                <div>
-                  <Label htmlFor="newPassword">New Password</Label>
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
+
+                <div className="border-t pt-8">
+                  {/* 2FA Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          {totpEnabled ? (
+                            <ShieldCheck className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <ShieldOff className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          Two-Factor Authentication
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {totpEnabled
+                            ? '2FA is enabled. Your account is secured with an authenticator app.'
+                            : 'Add an extra layer of security to your account using an authenticator app.'}
+                        </p>
+                      </div>
+                      {totpEnabled && (
+                        <span className="px-2.5 py-0.5 text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400 rounded-full">
+                          Enabled
+                        </span>
+                      )}
+                    </div>
+
+                    {!totpEnabled && !totpConfigured && (
+                      <Button onClick={setup2FA} disabled={totpLoading} variant="outline">
+                        {totpLoading ? 'Setting up...' : 'Set up Authenticator App'}
+                      </Button>
+                    )}
+
+                    {totpConfigured && !totpEnabled && (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-muted rounded-lg space-y-3">
+                          <p className="text-sm font-medium">1. Scan this QR code with your authenticator app</p>
+                          {totpQrCode && (
+                            <div className="flex justify-center">
+                              <img src={totpQrCode} alt="2FA QR Code" className="w-48 h-48" />
+                            </div>
+                          )}
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Or enter this code manually:</p>
+                            <div className="flex items-center gap-2">
+                              <code className="px-2 py-1 bg-background rounded text-sm font-mono flex-1 truncate">
+                                {showTotpSecret ? totpSecret : '••••••••••••••••'}
+                              </code>
+                              <Button variant="ghost" size="sm" onClick={() => setShowTotpSecret(!showTotpSecret)}>
+                                {showTotpSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={copyTotpSecret}>
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <Label htmlFor="totpCode">2. Enter the 6-digit code from your app</Label>
+                          <Input
+                            id="totpCode"
+                            value={totpCode}
+                            onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            placeholder="000000"
+                            className="font-mono text-lg tracking-widest"
+                            maxLength={6}
+                          />
+                        </div>
+                        <Button onClick={verify2FA} disabled={totpLoading || totpCode.length !== 6}>
+                          {totpLoading ? 'Verifying...' : 'Verify & Enable'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {totpEnabled && (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-muted/50 rounded-lg">
+                          <p className="text-sm text-muted-foreground">
+                            To disable 2FA, enter your current password below.
+                          </p>
+                        </div>
+                        <div>
+                          <Label htmlFor="disablePassword">Current Password</Label>
+                          <Input
+                            id="disablePassword"
+                            type="password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            placeholder="Enter password to confirm"
+                            autoComplete="current-password"
+                          />
+                        </div>
+                        <Button
+                          onClick={disable2FA}
+                          disabled={totpLoading || !currentPassword}
+                          variant="destructive"
+                        >
+                          {totpLoading ? 'Disabling...' : 'Disable Two-Factor Authentication'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Button onClick={changePassword} disabled={isSaving}>
-                  {isSaving ? 'Changing...' : 'Change Password'}
-                </Button>
               </div>
             )}
           </div>

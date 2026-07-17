@@ -28,10 +28,14 @@ interface AuthState {
   isCheckingAuth: boolean
   hasHydrated: boolean
   authRequired: boolean | null
+  requires2FA: boolean
+  tempToken: string | null
+  enforce2FA: boolean
   setHasHydrated: (state: boolean) => void
   checkAuthRequired: () => Promise<boolean>
   login: (password: string, email?: string) => Promise<boolean>
-  register: (username: string, password: string, email?: string, name?: string, referralCode?: string) => Promise<RegisterResult>
+  verify2FA: (code: string) => Promise<boolean>
+  register: (email: string, password: string, name?: string, referralCode?: string) => Promise<RegisterResult>
   logout: () => void
   checkAuth: () => Promise<boolean>
   updateProfile: (data: { email?: string; display_name?: string }) => Promise<boolean>
@@ -51,6 +55,9 @@ export const useAuthStore = create<AuthState>()(
       isCheckingAuth: false,
       hasHydrated: false,
       authRequired: null,
+      requires2FA: false,
+      tempToken: null,
+      enforce2FA: false,
 
       setHasHydrated: (state: boolean) => {
         set({ hasHydrated: state })
@@ -70,8 +77,9 @@ export const useAuthStore = create<AuthState>()(
           const data = await response.json()
           const authMode = data.auth_mode || 'single-password'
           const required = data.auth_enabled || false
+          const enforce2FA = data.enforce_2fa || false
           
-          set({ authRequired: required, authMode: authMode as 'single-password' | 'multi-user' })
+          set({ authRequired: required, authMode: authMode as 'single-password' | 'multi-user', enforce2FA })
 
           // If auth is not required, mark as authenticated
           if (!required) {
@@ -116,6 +124,18 @@ export const useAuthStore = create<AuthState>()(
 
             if (response.ok) {
               const data = await response.json()
+              
+              // Check if 2FA is required
+              if (data.requires_2fa) {
+                set({
+                  requires2FA: true,
+                  tempToken: data.temp_token,
+                  isLoading: false,
+                  error: null,
+                })
+                return false // Login not complete yet
+              }
+              
               set({
                 isAuthenticated: true,
                 token: data.access_token,
@@ -123,6 +143,8 @@ export const useAuthStore = create<AuthState>()(
                 isLoading: false,
                 lastAuthCheck: Date.now(),
                 error: null,
+                requires2FA: false,
+                tempToken: null,
               })
               return true
             } else {
@@ -204,7 +226,53 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (username: string, password: string, email?: string, name?: string, referralCode?: string) => {
+      verify2FA: async (code: string) => {
+        set({ isLoading: true, error: null })
+        const state = get()
+        
+        if (!state.tempToken) {
+          set({ error: 'No pending 2FA verification', isLoading: false })
+          return false
+        }
+        
+        try {
+          const apiUrl = await getApiUrl()
+          const response = await fetch(`${apiUrl}/api/auth/login/2fa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ temp_token: state.tempToken, code: code }),
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            set({
+              isAuthenticated: true,
+              token: data.access_token,
+              user: data.user,
+              isLoading: false,
+              lastAuthCheck: Date.now(),
+              error: null,
+              requires2FA: false,
+              tempToken: null,
+            })
+            return true
+          } else {
+            const errorData = await response.json()
+            let errorMessage = 'Invalid 2FA code'
+            if (typeof errorData.detail === 'string') {
+              errorMessage = errorData.detail
+            }
+            set({ error: errorMessage, isLoading: false })
+            return false
+          }
+        } catch (error) {
+          console.error('2FA verification error:', error)
+          set({ error: 'Network error during 2FA verification', isLoading: false })
+          return false
+        }
+      },
+
+      register: async (email: string, password: string, name?: string, referralCode?: string) => {
         set({ isLoading: true, error: null })
         try {
           const apiUrl = await getApiUrl()
@@ -215,9 +283,8 @@ export const useAuthStore = create<AuthState>()(
             return { success: false, autoApproved: false }
           }
 
-          const body: Record<string, string> = { username, password }
-          if (email) body.email = email
-          if (name) body.name = name
+          const body: Record<string, string> = { email, password }
+          if (name) body.display_name = name
           if (referralCode) body.referral_code = referralCode
 
           const response = await fetch(`${apiUrl}/api/auth/register`, {
@@ -450,6 +517,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         user: state.user,
         authMode: state.authMode,
+        enforce2FA: state.enforce2FA,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true)

@@ -1,5 +1,6 @@
 import asyncio
 import sqlite3
+import time
 from typing import Annotated, Optional
 
 from ai_prompter import Prompter
@@ -8,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from loguru import logger
 from typing_extensions import TypedDict
 
 from open_notebook.ai.provision import provision_langchain_model
@@ -28,61 +30,80 @@ class ThreadState(TypedDict):
 
 
 def call_model_with_messages(state: ThreadState, config: RunnableConfig) -> dict:
-    try:
-        system_prompt = Prompter(prompt_template="chat/system").render(data=state)  # type: ignore[arg-type]
-        payload = [SystemMessage(content=system_prompt)] + state.get("messages", [])
-        model_id = config.get("configurable", {}).get("model_id") or state.get(
-            "model_override"
-        )
+    max_retries = 3
+    last_error = None
 
-        # Handle async model provisioning from sync context
-        def run_in_new_loop():
-            """Run the async function in a new event loop"""
-            new_loop = asyncio.new_event_loop()
-            try:
-                asyncio.set_event_loop(new_loop)
-                return new_loop.run_until_complete(
-                    provision_langchain_model(
-                        str(payload), model_id, "chat", max_tokens=8192
-                    )
-                )
-            finally:
-                new_loop.close()
-                asyncio.set_event_loop(None)
-
+    for attempt in range(max_retries):
         try:
-            # Try to get the current event loop
-            asyncio.get_running_loop()
-            # If we're in an event loop, run in a thread with a new loop
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_new_loop)
-                model = future.result()
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run()
-            model = asyncio.run(
-                provision_langchain_model(
-                    str(payload),
-                    model_id,
-                    "chat",
-                    max_tokens=8192,
-                )
+            system_prompt = Prompter(prompt_template="chat/system").render(data=state)  # type: ignore[arg-type]
+            payload = [SystemMessage(content=system_prompt)] + state.get("messages", [])
+            model_id = config.get("configurable", {}).get("model_id") or state.get(
+                "model_override"
             )
 
-        ai_message = model.invoke(payload)
+            # Handle async model provisioning from sync context
+            def run_in_new_loop():
+                """Run the async function in a new event loop"""
+                new_loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(new_loop)
+                    return new_loop.run_until_complete(
+                        provision_langchain_model(
+                            str(payload), model_id, "chat", max_tokens=8192
+                        )
+                    )
+                finally:
+                    new_loop.close()
+                    asyncio.set_event_loop(None)
 
-        # Clean thinking content from AI response (e.g., <think>...</think> tags)
-        content = extract_text_content(ai_message.content)
-        cleaned_content = clean_thinking_content(content)
-        cleaned_message = ai_message.model_copy(update={"content": cleaned_content})
+            try:
+                # Try to get the current event loop
+                asyncio.get_running_loop()
+                # If we're in an event loop, run in a thread with a new loop
+                import concurrent.futures
 
-        return {"messages": cleaned_message}
-    except OpenNotebookError:
-        raise
-    except Exception as e:
-        error_class, user_message = classify_error(e)
-        raise error_class(user_message) from e
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(run_in_new_loop)
+                    model = future.result()
+            except RuntimeError:
+                # No event loop running, safe to use asyncio.run()
+                model = asyncio.run(
+                    provision_langchain_model(
+                        str(payload),
+                        model_id,
+                        "chat",
+                        max_tokens=8192,
+                    )
+                )
+
+            ai_message = model.invoke(payload)
+
+            # Clean thinking content from AI response (e.g., <think>...</think> tags)
+            content = extract_text_content(ai_message.content)
+            cleaned_content = clean_thinking_content(content)
+            cleaned_message = ai_message.model_copy(update={"content": cleaned_content})
+
+            return {"messages": cleaned_message}
+        except OpenNotebookError:
+            raise
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            is_transient = any(kw in error_str for kw in [
+                "tokenize", "connection", "temporarily unavailable",
+                "connectex", "connectionreset", "connectionrefused",
+                "timeout", "timed out", "500"
+            ])
+            if is_transient and attempt < max_retries - 1:
+                wait = 2 ** attempt
+                logger.warning(f"Transient error on attempt {attempt + 1}/{max_retries}, retrying in {wait}s: {e}")
+                time.sleep(wait)
+                continue
+            error_class, user_message = classify_error(e)
+            raise error_class(user_message) from e
+
+    error_class, user_message = classify_error(last_error)
+    raise error_class(user_message) from last_error
 
 
 conn = sqlite3.connect(

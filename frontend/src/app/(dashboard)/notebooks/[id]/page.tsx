@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AppShell } from '@/components/layout/AppShell'
-import { NotebookHeader } from '../components/NotebookHeader'
 import { SourcesColumn } from '../components/SourcesColumn'
 import { NotesColumn } from '../components/NotesColumn'
 import { ChatColumn } from '../components/ChatColumn'
@@ -16,27 +15,25 @@ import { useIsDesktop } from '@/lib/hooks/use-media-query'
 import { useTranslation } from '@/lib/hooks/use-translation'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FileText, StickyNote, MessageSquare } from 'lucide-react'
-import {
-  applyBulkSourceContext,
-  applyBulkNoteContext,
-  computeSourceSelections,
-  computeNoteSelections,
-  type SourceContextDefault,
-  type SourceBulkAction,
-  type NoteContextDefault,
-} from '@/lib/utils/source-context'
+import { FileText, StickyNote, MessageSquare, Globe } from 'lucide-react'
+import { CollapsibleColumn } from '@/components/notebooks/CollapsibleColumn'
+import { BrowserColumn } from '@/components/notebooks/BrowserColumn'
 
-// Re-exported from the shared types module for backward compatibility; several
-// components historically import these from this route file.
-import type { ContextMode, ContextSelections, NoteContextMode } from '@/lib/types/notebook-context'
-export type { ContextMode, ContextSelections, NoteContextMode }
+export type ContextMode = 'off' | 'insights' | 'full'
+
+export interface ContextSelections {
+  sources: Record<string, ContextMode>
+  notes: Record<string, ContextMode>
+}
+
+type ColumnId = 'sources' | 'notes' | 'chat' | 'browser'
+const COLUMN_ORDER: ColumnId[] = ['sources', 'notes', 'chat', 'browser']
+const MAX_VISIBLE = 3
 
 export default function NotebookPage() {
   const { t } = useTranslation()
   const params = useParams()
 
-  // Ensure the notebook ID is properly decoded from URL
   const notebookId = params?.id ? decodeURIComponent(params.id as string) : ''
 
   const { data: notebook, isLoading: notebookLoading } = useNotebook(notebookId)
@@ -50,85 +47,112 @@ export default function NotebookPage() {
   } = useNotebookSources(notebookId)
   const { data: notes, isLoading: notesLoading } = useNotes(notebookId)
 
-  // Get collapse states for dynamic layout
-  const { sourcesCollapsed, notesCollapsed } = useNotebookColumnsStore()
-
-  // Detect desktop to avoid double-mounting ChatColumn
+  const store = useNotebookColumnsStore()
   const isDesktop = useIsDesktop()
 
-  // Mobile tab state (Sources, Notes, or Chat)
   const [mobileActiveTab, setMobileActiveTab] = useState<'sources' | 'notes' | 'chat'>('chat')
 
-  // Context selection state
   const [contextSelections, setContextSelections] = useState<ContextSelections>({
     sources: {},
     notes: {}
   })
 
-  // The default context mode applied to sources as they load. A bulk
-  // include/exclude updates this so sources loaded later via pagination follow
-  // the same intent instead of reverting to "included" (#223/#915).
-  const [sourceContextDefault, setSourceContextDefault] = useState<SourceContextDefault>('include')
+  // Count open panels
+  const openCount = useMemo(() => {
+    let count = 0
+    if (!store.sourcesCollapsed) count++
+    if (!store.notesCollapsed) count++
+    if (!store.chatCollapsed) count++
+    if (!store.browserCollapsed) count++
+    return count
+  }, [store.sourcesCollapsed, store.notesCollapsed, store.chatCollapsed, store.browserCollapsed])
 
-  // Same idea for notes loaded later (notes are binary: included/off).
-  const [noteContextDefault, setNoteContextDefault] = useState<NoteContextDefault>('include')
+  // Get list of open panel IDs in order
+  const openPanels = useMemo(() => {
+    const panels: ColumnId[] = []
+    if (!store.sourcesCollapsed) panels.push('sources')
+    if (!store.notesCollapsed) panels.push('notes')
+    if (!store.chatCollapsed) panels.push('chat')
+    if (!store.browserCollapsed) panels.push('browser')
+    return panels
+  }, [store.sourcesCollapsed, store.notesCollapsed, store.chatCollapsed, store.browserCollapsed])
 
-  // Initialize and update selections when sources load or change
+  // Enforce max 3 visible - close the first open one (oldest) when opening a 4th
+  const enforceMaxVisible = useCallback((openingColumn: ColumnId) => {
+    if (openCount >= MAX_VISIBLE) {
+      // Find the first open column that isn't the one being opened
+      const toClose = openPanels.find(id => id !== openingColumn)
+      if (toClose) {
+        switch (toClose) {
+          case 'sources': store.setSources(true); break
+          case 'notes': store.setNotes(true); break
+          case 'chat': store.setChat(true); break
+          case 'browser': store.setBrowser(true); break
+        }
+      }
+    }
+  }, [openCount, openPanels, store])
+
+  // Toggle wrappers with max enforcement
+  const toggleSources = useCallback(() => {
+    if (store.sourcesCollapsed) enforceMaxVisible('sources')
+    store.toggleSources()
+  }, [store, enforceMaxVisible])
+
+  const toggleNotes = useCallback(() => {
+    if (store.notesCollapsed) enforceMaxVisible('notes')
+    store.toggleNotes()
+  }, [store, enforceMaxVisible])
+
+  const toggleChat = useCallback(() => {
+    if (store.chatCollapsed) enforceMaxVisible('chat')
+    store.toggleChat()
+  }, [store, enforceMaxVisible])
+
+  const toggleBrowser = useCallback(() => {
+    if (store.browserCollapsed) enforceMaxVisible('browser')
+    store.toggleBrowser()
+  }, [store, enforceMaxVisible])
+
   useEffect(() => {
     if (sources && sources.length > 0) {
-      setContextSelections(prev => ({
-        ...prev,
-        sources: computeSourceSelections(prev.sources, sources, sourceContextDefault),
-      }))
+      setContextSelections(prev => {
+        const newSourceSelections = { ...prev.sources }
+        sources.forEach(source => {
+          const currentMode = newSourceSelections[source.id]
+          const hasInsights = source.insights_count > 0
+          if (currentMode === undefined) {
+            newSourceSelections[source.id] = hasInsights ? 'insights' : 'full'
+          } else if (currentMode === 'full' && hasInsights) {
+            newSourceSelections[source.id] = 'insights'
+          }
+        })
+        return { ...prev, sources: newSourceSelections }
+      })
     }
-  }, [sources, sourceContextDefault])
+  }, [sources])
 
   useEffect(() => {
     if (notes && notes.length > 0) {
-      setContextSelections(prev => ({
-        ...prev,
-        notes: computeNoteSelections(prev.notes, notes, noteContextDefault),
-      }))
+      setContextSelections(prev => {
+        const newNoteSelections = { ...prev.notes }
+        notes.forEach(note => {
+          if (!(note.id in newNoteSelections)) {
+            newNoteSelections[note.id] = 'full'
+          }
+        })
+        return { ...prev, notes: newNoteSelections }
+      })
     }
-  }, [notes, noteContextDefault])
+  }, [notes])
 
-  const handleSourceContextModeChange = (sourceId: string, mode: ContextMode) => {
+  const handleContextModeChange = (itemId: string, mode: ContextMode, type: 'source' | 'note') => {
     setContextSelections(prev => ({
       ...prev,
-      sources: {
-        ...prev.sources,
-        [sourceId]: mode
+      [type === 'source' ? 'sources' : 'notes']: {
+        ...(type === 'source' ? prev.sources : prev.notes),
+        [itemId]: mode
       }
-    }))
-  }
-
-  const handleNoteContextModeChange = (noteId: string, mode: NoteContextMode) => {
-    setContextSelections(prev => ({
-      ...prev,
-      notes: {
-        ...prev.notes,
-        [noteId]: mode
-      }
-    }))
-  }
-
-  // Bulk-apply a context action (insights-only / full / exclude) to every
-  // source at once (#223). Also records the action as the default for sources
-  // loaded later (#915).
-  const handleBulkSourceContext = (action: SourceBulkAction) => {
-    setSourceContextDefault(action)
-    setContextSelections(prev => ({
-      ...prev,
-      sources: applyBulkSourceContext(prev.sources, sources ?? [], action),
-    }))
-  }
-
-  // Bulk include/exclude every note from the chat context at once (#223).
-  const handleBulkNoteContext = (action: NoteContextDefault) => {
-    setNoteContextDefault(action)
-    setContextSelections(prev => ({
-      ...prev,
-      notes: applyBulkNoteContext(prev.notes, notes ?? [], action),
     }))
   }
 
@@ -154,12 +178,8 @@ export default function NotebookPage() {
   return (
     <AppShell>
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex-shrink-0 p-6 pb-0">
-          <NotebookHeader notebook={notebook} />
-        </div>
-
-        <div className="flex-1 p-6 pt-6 overflow-x-auto flex flex-col">
-          {/* Mobile: Tabbed interface - only render on mobile to avoid double-mounting */}
+        <div className="flex-1 p-2 pt-1 overflow-hidden flex flex-col">
+          {/* Mobile */}
           {!isDesktop && (
             <>
               <div className="lg:hidden mb-4">
@@ -181,7 +201,6 @@ export default function NotebookPage() {
                 </Tabs>
               </div>
 
-              {/* Mobile: Show only active tab */}
               <div className="flex-1 overflow-hidden lg:hidden">
                 {mobileActiveTab === 'sources' && (
                   <SourcesColumn
@@ -191,8 +210,7 @@ export default function NotebookPage() {
                     notebookName={notebook?.name}
                     onRefresh={refetchSources}
                     contextSelections={contextSelections.sources}
-                    onContextModeChange={handleSourceContextModeChange}
-                    onBulkContextModeChange={handleBulkSourceContext}
+                    onContextModeChange={(sourceId, mode) => handleContextModeChange(sourceId, mode, 'source')}
                     hasNextPage={hasNextPage}
                     isFetchingNextPage={isFetchingNextPage}
                     fetchNextPage={fetchNextPage}
@@ -204,8 +222,7 @@ export default function NotebookPage() {
                     isLoading={notesLoading}
                     notebookId={notebookId}
                     contextSelections={contextSelections.notes}
-                    onContextModeChange={handleNoteContextModeChange}
-                    onBulkContextModeChange={handleBulkNoteContext}
+                    onContextModeChange={(noteId, mode) => handleContextModeChange(noteId, mode, 'note')}
                   />
                 )}
                 {mobileActiveTab === 'chat' && (
@@ -220,54 +237,96 @@ export default function NotebookPage() {
             </>
           )}
 
-          {/* Desktop: Collapsible columns layout */}
-          <div className={cn(
-            'hidden lg:flex h-full min-h-0 gap-6 transition-all duration-150',
-            'flex-row'
-          )}>
-            {/* Sources Column */}
+          {/* Desktop: 4 columns in fixed order, collapsed = 40px, open = flex-1 */}
+          <div className="hidden lg:flex h-full min-h-0 gap-1">
+            {/* Sources - position 1 */}
             <div className={cn(
-              'transition-all duration-150',
-              sourcesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/3'
+              'h-full transition-all duration-150',
+              store.sourcesCollapsed
+                ? 'w-10 flex-shrink-0'
+                : 'flex-1 min-w-0'
             )}>
-              <SourcesColumn
-                sources={sources}
-                isLoading={sourcesLoading}
-                notebookId={notebookId}
-                notebookName={notebook?.name}
-                onRefresh={refetchSources}
-                contextSelections={contextSelections.sources}
-                onContextModeChange={handleSourceContextModeChange}
-                onBulkContextModeChange={handleBulkSourceContext}
-                hasNextPage={hasNextPage}
-                isFetchingNextPage={isFetchingNextPage}
-                fetchNextPage={fetchNextPage}
-              />
+              <CollapsibleColumn
+                isCollapsed={store.sourcesCollapsed}
+                onToggle={toggleSources}
+                collapsedIcon={FileText}
+                collapsedLabel={t('navigation.sources')}
+              >
+                <SourcesColumn
+                  sources={sources}
+                  isLoading={sourcesLoading}
+                  notebookId={notebookId}
+                  notebookName={notebook?.name}
+                  onRefresh={refetchSources}
+                  contextSelections={contextSelections.sources}
+                  onContextModeChange={(sourceId, mode) => handleContextModeChange(sourceId, mode, 'source')}
+                  hasNextPage={hasNextPage}
+                  isFetchingNextPage={isFetchingNextPage}
+                  fetchNextPage={fetchNextPage}
+                />
+              </CollapsibleColumn>
             </div>
 
-            {/* Notes Column */}
+            {/* Notes - position 2 */}
             <div className={cn(
-              'transition-all duration-150',
-              notesCollapsed ? 'w-12 flex-shrink-0' : 'flex-none basis-1/3'
+              'h-full transition-all duration-150',
+              store.notesCollapsed
+                ? 'w-10 flex-shrink-0'
+                : 'flex-1 min-w-0'
             )}>
-              <NotesColumn
-                notes={notes}
-                isLoading={notesLoading}
-                notebookId={notebookId}
-                contextSelections={contextSelections.notes}
-                onContextModeChange={handleNoteContextModeChange}
-                onBulkContextModeChange={handleBulkNoteContext}
-              />
+              <CollapsibleColumn
+                isCollapsed={store.notesCollapsed}
+                onToggle={toggleNotes}
+                collapsedIcon={StickyNote}
+                collapsedLabel={t('common.notes')}
+              >
+                <NotesColumn
+                  notes={notes}
+                  isLoading={notesLoading}
+                  notebookId={notebookId}
+                  contextSelections={contextSelections.notes}
+                  onContextModeChange={(noteId, mode) => handleContextModeChange(noteId, mode, 'note')}
+                />
+              </CollapsibleColumn>
             </div>
 
-            {/* Chat Column - always expanded, takes remaining space */}
-            <div className="transition-all duration-150 flex-1 min-w-0 lg:pr-6 lg:-mr-6">
-              <ChatColumn
-                notebookId={notebookId}
-                contextSelections={contextSelections}
-                sources={sources}
-                sourcesLoading={sourcesLoading}
-              />
+            {/* Chat - position 3 */}
+            <div className={cn(
+              'h-full transition-all duration-150',
+              store.chatCollapsed
+                ? 'w-10 flex-shrink-0'
+                : 'flex-1 min-w-0'
+            )}>
+              <CollapsibleColumn
+                isCollapsed={store.chatCollapsed}
+                onToggle={toggleChat}
+                collapsedIcon={MessageSquare}
+                collapsedLabel={t('common.chat')}
+              >
+                <ChatColumn
+                  notebookId={notebookId}
+                  contextSelections={contextSelections}
+                  sources={sources}
+                  sourcesLoading={sourcesLoading}
+                />
+              </CollapsibleColumn>
+            </div>
+
+            {/* Browser - position 4 */}
+            <div className={cn(
+              'h-full transition-all duration-150',
+              store.browserCollapsed
+                ? 'w-10 flex-shrink-0'
+                : 'flex-1 min-w-0'
+            )}>
+              <CollapsibleColumn
+                isCollapsed={store.browserCollapsed}
+                onToggle={toggleBrowser}
+                collapsedIcon={Globe}
+                collapsedLabel={t('common.browser') || 'Browser'}
+              >
+                <BrowserColumn notebookId={notebookId} />
+              </CollapsibleColumn>
             </div>
           </div>
         </div>

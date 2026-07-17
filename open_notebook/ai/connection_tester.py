@@ -28,6 +28,7 @@ TEST_MODELS = {
     "elevenlabs": ("eleven_multilingual_v2", "text_to_speech"),
     "deepgram": ("aura-2-thalia-en", "text_to_speech"),
     "ollama": (None, "language"),  # Dynamic - will use first available model
+    "ollama_cloud": (None, "language"),  # Dynamic - remote Ollama endpoint
     # Complex providers with additional configuration
     "vertex": ("gemini-2.0-flash", "language"),  # Uses Google Vertex AI
     "azure": ("gpt-35-turbo", "language"),  # Azure OpenAI deployment name

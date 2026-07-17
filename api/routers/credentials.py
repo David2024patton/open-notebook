@@ -18,6 +18,7 @@ Endpoints:
 NEVER returns actual API key values - only metadata.
 """
 
+import asyncio
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -64,6 +65,19 @@ router = APIRouter(prefix="/credentials", tags=["credentials"])
 def _handle_value_error(e: ValueError, status_code: int = 400) -> HTTPException:
     """Convert a ValueError from the service layer to an HTTPException."""
     return HTTPException(status_code=status_code, detail=str(e))
+
+
+async def _sync_models_background(provider: str, credential_id: str = None):
+    """Sync models in the background after credential save."""
+    try:
+        from open_notebook.ai.model_discovery import sync_provider_models
+        from open_notebook.ai.key_provider import provision_provider_keys
+
+        await provision_provider_keys(provider)
+        discovered, new, existing = await sync_provider_models(provider, auto_register=True, credential_id=credential_id)
+        logger.info(f"Auto-synced {provider}: {discovered} discovered, {new} new, {existing} existing")
+    except Exception as e:
+        logger.warning(f"Background model sync failed for {provider}: {e}")
 
 
 # =============================================================================
@@ -175,6 +189,10 @@ async def create_credential(request: CreateCredentialRequest):
             num_ctx=request.num_ctx,
         )
         await cred.save()
+
+        # Auto-sync models in background
+        asyncio.create_task(_sync_models_background(request.provider.lower(), cred.id))
+
         return credential_to_response(cred, 0)
 
     except Exception as e:
@@ -247,6 +265,10 @@ async def update_credential(credential_id: str, request: UpdateCredentialRequest
             cred.num_ctx = request.num_ctx or None
 
         await cred.save()
+
+        # Auto-sync models in background
+        asyncio.create_task(_sync_models_background(cred.provider, cred.id))
+
         models = await cred.get_linked_models()
         return credential_to_response(cred, len(models))
 

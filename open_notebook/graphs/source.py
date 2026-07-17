@@ -14,6 +14,7 @@ from open_notebook.domain.content_settings import ContentSettings
 from open_notebook.domain.notebook import Asset, Source
 from open_notebook.domain.transformation import Transformation
 from open_notebook.graphs.transformation import graph as transform_graph
+from open_notebook.processors.git import extract_git_repo, is_git_url
 
 
 class SourceState(TypedDict):
@@ -32,6 +33,40 @@ class TransformationState(TypedDict):
 
 
 async def content_process(state: SourceState) -> dict:
+    content_state: Dict[str, Any] = state["content_state"]  # type: ignore[assignment]
+    
+    # Check if this is a Git repository URL
+    url = content_state.get("url", "")
+    if url and is_git_url(url):
+        logger.info(f"Detected Git repository URL: {url}")
+        try:
+            git_result = await extract_git_repo(url)
+            
+            if git_result["content"]:
+                # Create a ProcessSourceState with the extracted content
+                processed_state = ProcessSourceState(
+                    url=url,
+                    content=git_result["content"],
+                    title=git_result["title"],
+                    source_type="url",
+                    identified_type="git_repository",
+                    metadata=git_result.get("metadata", {}),
+                )
+                return {"content_state": processed_state}
+            else:
+                error_msg = git_result.get("metadata", {}).get("error", "Unknown error")
+                raise ValueError(
+                    f"Could not extract content from this Git repository. {error_msg}"
+                )
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Git extraction failed: {e}")
+            raise ValueError(
+                f"Failed to process Git repository: {str(e)}"
+            )
+    
+    # Non-Git URLs: use standard content-core extraction
     content_settings = ContentSettings(
         default_content_processing_engine_doc="auto",
         default_content_processing_engine_url="auto",
@@ -49,7 +84,6 @@ async def content_process(state: SourceState) -> dict:
             "ja",
         ],
     )
-    content_state: Dict[str, Any] = state["content_state"]  # type: ignore[assignment]
 
     content_state["url_engine"] = (
         content_settings.default_content_processing_engine_url or "auto"

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useId } from 'react'
+import { useState, useRef, useEffect, useId, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -20,6 +20,7 @@ import { SessionManager } from '@/components/source/SessionManager'
 import { MessageActions } from '@/components/source/MessageActions'
 import { convertReferencesToCompactMarkdown, createCompactReferenceLinkComponent } from '@/lib/utils/source-references'
 import { useModalManager } from '@/lib/hooks/use-modal-manager'
+import { useModels } from '@/lib/hooks/use-models'
 import { toast } from 'sonner'
 import { useTranslation } from '@/lib/hooks/use-translation'
 
@@ -75,12 +76,19 @@ export function ChatPanel({
   notebookId
 }: ChatPanelProps) {
   const { t } = useTranslation()
+  const { data: models } = useModels()
   const chatInputId = useId()
   const [input, setInput] = useState('')
   const [sessionManagerOpen, setSessionManagerOpen] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { openModal } = useModalManager()
+  
+  // Look up current model name/provider for debug
+  const modelInfo = useMemo(() => {
+    if (!modelOverride || !models) return null
+    return models.find(m => m.id === modelOverride)
+  }, [modelOverride, models])
 
   const handleReferenceClick = (type: string, id: string) => {
     const modalType = type === 'source_insight' ? 'insight' : type as 'source' | 'note' | 'insight'
@@ -143,7 +151,7 @@ export function ChatPanel({
                 <Clock className="h-4 w-4" />
                 <span className="text-xs">{t('chat.sessions')}</span>
               </Button>
-              <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden">
+              <DialogContent className="sm:max-w-[400px] h-[500px] p-0 flex flex-col">
                 <DialogTitle className="sr-only">{t('chat.sessionsTitle')}</DialogTitle>
                 <SessionManager
                   sessions={sessions}
@@ -165,6 +173,11 @@ export function ChatPanel({
       <CardContent className="flex-1 flex flex-col min-h-0 p-0">
         <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollAreaRef}>
           <div className="space-y-4 py-4">
+            {/* DEBUG: Message count indicator */}
+            <div className="text-xs text-red-500 font-mono text-center mb-2">
+              Messages: {messages.length} | Types: {messages.map(m => m.type).join(', ')} | AI contents: {messages.filter(m => m.type === 'ai').map(m => (m.content || '').substring(0, 30) || 'EMPTY').join(', ')}
+            </div>
+
             {messages.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -197,10 +210,12 @@ export function ChatPanel({
                       }`}
                     >
                       {message.type === 'ai' ? (
-                        <AIMessageContent
-                          content={message.content}
-                          onReferenceClick={handleReferenceClick}
-                        />
+                        <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                          {message.content || <em className="text-red-400">(empty content)</em>}
+                          <div className="mt-2 pt-2 border-t border-dashed border-yellow-500 text-[10px] text-yellow-600 font-mono leading-relaxed">
+                            DEBUG: ts={message.timestamp || new Date().toISOString().slice(11,19)} | len={message.content?.length || 0} | model={modelInfo ? `${modelInfo.name} (${modelInfo.provider})` : (modelOverride?.slice(-12) || 'default')} | ctx_tk={notebookContextStats?.tokenCount ?? '?'} | ctx_ch={notebookContextStats?.charCount ?? '?'} | id={message.id?.slice(-16)}
+                          </div>
+                        </div>
                       ) : (
                         <p className="text-sm break-all">{message.content}</p>
                       )}

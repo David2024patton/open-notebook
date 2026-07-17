@@ -65,6 +65,13 @@ PROVIDER_CONFIG = {
         "env_var": "OLLAMA_API_BASE",
         "base_url": "http://host.docker.internal:11434",
     },
+    # Ollama Cloud (e.g. Ollama Cloud, Runpod, Together-hosted Ollama, etc.)
+    # Maps to the same Esperanto "ollama" provider but with a remote base URL
+    # and an optional API key for authenticated cloud endpoints.
+    "ollama_cloud": {
+        "env_var": "OLLAMA_CLOUD_API_KEY",
+        "base_url": "",  # User-configured cloud URL
+    },
     "dashscope": {
         "env_var": "DASHSCOPE_API_KEY",
     },
@@ -169,9 +176,15 @@ async def _provision_simple_provider(provider: str) -> bool:
 
     # Set base URL if present
     if cred.base_url:
-        provider_upper = provider_lower.upper()
-        os.environ[f"{provider_upper}_API_BASE"] = cred.base_url
-        logger.debug(f"Set {provider_upper}_API_BASE from Credential")
+        # ollama_cloud maps to the same Esperanto "ollama" provider, so its
+        # base URL must be exposed via OLLAMA_API_BASE for Esperanto to find it.
+        if provider_lower == "ollama_cloud":
+            os.environ["OLLAMA_API_BASE"] = cred.base_url
+            logger.debug("Set OLLAMA_API_BASE from ollama_cloud Credential")
+        else:
+            provider_upper = provider_lower.upper()
+            os.environ[f"{provider_upper}_API_BASE"] = cred.base_url
+            logger.debug(f"Set {provider_upper}_API_BASE from Credential")
 
     return True
 
