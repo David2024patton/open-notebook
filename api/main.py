@@ -391,7 +391,8 @@ app.add_middleware(RateLimitMiddleware)
 # Bridge the authenticated user into per-request DB contextvars (tenant scope).
 # Must be added BEFORE the auth middleware so it ends up INNERMOST and runs
 # AFTER the auth middleware has populated request.state.user_id.
-app.add_middleware(RequestTenantBridge)
+# DIAGNOSTIC (temporary): disabled to isolate 500-on-every-request cause.
+# app.add_middleware(RequestTenantBridge)
 
 # Add authentication middleware (modular: selected by OPEN_NOTEBOOK_AUTH_MODE).
 # In multi-user mode this installs MultiUserAuthMiddleware (JWT); otherwise it
