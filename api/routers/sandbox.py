@@ -5,9 +5,8 @@ visualization, and computation.
 """
 
 import io
-import sys
 import traceback
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException

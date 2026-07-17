@@ -15,7 +15,7 @@ from api.routers._chat_shared import (
     get_session_or_404,
 )
 from open_notebook.database.repository import ensure_record_id, repo_query
-from open_notebook.domain.notebook import ChatSession, Notebook
+from open_notebook.domain.notebook import ChatSession, Note, Notebook
 from open_notebook.exceptions import (
     NotFoundError,
     OpenNotebookError,

@@ -73,8 +73,8 @@ def _handle_value_error(e: ValueError, status_code: int = 400) -> HTTPException:
 async def _sync_models_background(provider: str, credential_id: str = None):
     """Sync models in the background after credential save."""
     try:
-        from open_notebook.ai.model_discovery import sync_provider_models
         from open_notebook.ai.key_provider import provision_provider_keys
+        from open_notebook.ai.model_discovery import sync_provider_models
 
         await provision_provider_keys(provider)
         discovered, new, existing = await sync_provider_models(provider, auto_register=True, credential_id=credential_id)

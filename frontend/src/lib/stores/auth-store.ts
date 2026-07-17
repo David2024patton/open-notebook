@@ -67,15 +67,15 @@ export const useAuthStore = create<AuthState>()(
 
       checkAuthRequired: async () => {
         try {
-          const response = await apiClient.get<{ auth_enabled?: boolean }>('/auth/status', {
+          const response = await apiClient.get<{
+            auth_enabled?: boolean
+            auth_mode?: string
+            enforce_2fa?: boolean
+          }>('/auth/status', {
             headers: { 'Cache-Control': 'no-store' },
           })
 
-          if (!response.ok) {
-            throw new Error(`Auth status check failed: ${response.status}`)
-          }
-
-          const data = await response.json()
+          const data = response.data
           const authMode = data.auth_mode || 'single-password'
           const required = data.auth_enabled || false
           const enforce2FA = data.enforce_2fa || false

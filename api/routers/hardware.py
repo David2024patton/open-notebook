@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
-from open_notebook.utils.hardware import detect_hardware, get_hardware_report
+from open_notebook.utils.hardware import get_hardware_report
 from open_notebook.utils.model_limiter import model_limiter
 
 router = APIRouter()

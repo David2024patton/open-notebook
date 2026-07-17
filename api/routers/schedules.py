@@ -3,7 +3,6 @@
 Allows users to set up automated research tasks that run on a schedule.
 """
 
-import json
 import traceback
 from datetime import datetime, timezone
 from typing import Optional
@@ -12,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
-from open_notebook.database.repository import repo_query, ensure_record_id
+from open_notebook.database.repository import ensure_record_id, repo_query
 
 router = APIRouter()
 
@@ -202,7 +201,6 @@ async def run_schedule(schedule_id: str):
         schedule = results[0]
         task_type = schedule.get("task_type", "")
         query = schedule.get("query", "")
-        notebook_id = schedule.get("notebook_id")
 
         now = datetime.now(timezone.utc).isoformat()
 

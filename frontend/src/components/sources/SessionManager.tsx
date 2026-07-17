@@ -260,7 +260,6 @@ export function SessionManager({
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        </div>
                         {session.message_count != null && session.message_count > 0 && (
                           <Badge variant="secondary" className="mt-2 text-xs">
                             {t('chat.messagesCount', { count: session.message_count })}

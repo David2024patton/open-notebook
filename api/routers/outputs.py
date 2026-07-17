@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
-from open_notebook.database.repository import repo_query, ensure_record_id
+from open_notebook.database.repository import ensure_record_id, repo_query
 
 router = APIRouter()
 

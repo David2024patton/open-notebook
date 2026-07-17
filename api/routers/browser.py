@@ -1,8 +1,8 @@
 """Browser automation API endpoints."""
 
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
 from open_notebook.browser.service import browser_service
 

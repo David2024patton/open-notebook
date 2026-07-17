@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel
 
-from open_notebook.database.repository import repo_query, ensure_record_id
+from open_notebook.database.repository import ensure_record_id, repo_query
 
 router = APIRouter()
 
@@ -208,8 +208,8 @@ async def export_notebook(notebook_id: str, format: str):
             filename = f"{safe_name}.pdf"
 
             try:
-                from weasyprint import HTML
                 import markdown as md
+                from weasyprint import HTML
 
                 html_content = md.markdown(markdown_content, extensions=["tables", "fenced_code"])
                 full_html = f"""<!DOCTYPE html>
@@ -300,8 +300,8 @@ async def export_source(source_id: str, format: str):
 
         elif format == "pdf":
             try:
-                from weasyprint import HTML
                 import markdown as md
+                from weasyprint import HTML
 
                 md_content = f"# {name}\n\n"
                 if url:

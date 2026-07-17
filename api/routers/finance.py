@@ -6,7 +6,6 @@ Uses yfinance for free stock data without API keys.
 
 import json
 import traceback
-from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -124,6 +123,7 @@ async def analyze_stock(request: StockAnalysisRequest):
     """
     try:
         import yfinance as yf
+
         from open_notebook.ai.models import Model
 
         ticker = yf.Ticker(request.symbol)

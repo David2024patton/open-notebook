@@ -3,21 +3,13 @@
 import { useRouter, useParams } from 'next/navigation'
 import { useCallback, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-<<<<<<< HEAD
 import { ArrowLeft, AlertCircle } from 'lucide-react'
-import { useSourceChat } from '@/lib/hooks/useSourceChat'
-import { ChatPanel } from '@/components/source/ChatPanel'
-import { useNavigation } from '@/lib/hooks/use-navigation'
-import { SourceDetailContent } from '@/components/source/SourceDetailContent'
-import { sourcesApi } from '@/lib/api/sources'
-import { useTranslation } from '@/lib/hooks/use-translation'
-=======
-import { ArrowLeft } from 'lucide-react'
 import { useSourceChat } from '@/lib/hooks/use-source-chat'
 import { ChatPanel } from '@/components/sources/ChatPanel'
 import { useNavigation } from '@/lib/hooks/use-navigation'
 import { SourceDetailContent } from '@/components/sources/SourceDetailContent'
->>>>>>> upstream/main
+import { useTranslation } from '@/lib/hooks/use-translation'
+import { sourcesApi } from '@/lib/api/sources'
 
 export default function SourceDetailPage() {
   const router = useRouter()

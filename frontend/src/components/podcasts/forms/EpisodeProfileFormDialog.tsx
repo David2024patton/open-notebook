@@ -97,7 +97,7 @@ export function EpisodeProfileFormDialog({
         name: initialData.name,
         description: initialData.description ?? '',
         category: initialData.category ?? '',
-        speaker_config: initialData.speaker_config,
+        speaker_config: initialData.speaker_config ?? '',
         outline_llm: initialData.outline_llm ?? '',
         transcript_llm: initialData.transcript_llm ?? '',
         language: initialData.language ?? null,

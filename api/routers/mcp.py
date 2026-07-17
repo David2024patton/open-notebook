@@ -4,7 +4,6 @@ Provides standardized tool integrations following the MCP specification.
 Allows external tools and services to connect to Open Notebook.
 """
 
-import json
 import traceback
 from typing import Any, Optional
 
@@ -162,7 +161,7 @@ async def call_mcp_tool(tool_name: str, request: MCPToolCall):
             result = {"notebooks": results or []}
 
         elif tool_name == "get_source_content":
-            from open_notebook.database.repository import repo_query, ensure_record_id
+            from open_notebook.database.repository import ensure_record_id, repo_query
             source_id = ensure_record_id(request.arguments.get("source_id", ""))
             results = await repo_query(f"SELECT * FROM {source_id};")
             result = {"source": results[0] if results else None}

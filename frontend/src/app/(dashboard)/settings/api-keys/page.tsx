@@ -1,16 +1,75 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useId } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { Key, ShieldAlert, AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Key,
+  ShieldAlert,
+  AlertCircle,
+  Bot,
+  Check,
+  Code,
+  Edit,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Plug,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  Wand2,
+  X,
+  Volume2,
+} from 'lucide-react'
 import { useTranslation } from '@/lib/hooks/use-translation'
-import { useModels, useModelDefaults } from '@/lib/hooks/use-models'
+import {
+  useModels,
+  useModelDefaults,
+  useUpdateModelDefaults,
+  useAutoAssignDefaults,
+  useDeleteModel,
+  useTestModel,
+} from '@/lib/hooks/use-models'
+import { useProviders } from '@/lib/hooks/use-providers'
+import { useForm } from 'react-hook-form'
 import {
   useCredentials,
   useCredentialStatus,
   useEnvStatus,
+  useCreateCredential,
+  useUpdateCredential,
+  useDeleteCredential,
+  useTestCredential,
+  useCredential,
+  useDiscoverModels,
+  useRegisterModels,
 } from '@/lib/hooks/use-credentials'
 import { Credential, CreateCredentialRequest, UpdateCredentialRequest, DiscoveredModel } from '@/lib/api/credentials'
 import { Model, ModelDefaults } from '@/lib/types/models'
@@ -1470,8 +1529,8 @@ export default function ApiKeysPage() {
   }, [providers, credentialsByProvider])
 
   // Group providers by category
-  const cloudProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p] === 'Cloud')
-  const localProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p] === 'Local')
+  const cloudProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p.name] === 'Cloud')
+  const localProviders = sortedProviders.filter(p => PROVIDER_CATEGORIES[p.name] === 'Local')
 
   const isLoading = credentialsLoading || modelsLoading || defaultsLoading
 
@@ -1531,9 +1590,9 @@ export default function ApiKeysPage() {
                 <div className="grid gap-4">
                   {cloudProviders.map(provider => (
                     <ProviderSection
-                      key={provider}
-                      provider={provider}
-                      credentials={credentialsByProvider[provider] || []}
+                      key={provider.name}
+                      provider={provider.name}
+                      credentials={credentialsByProvider[provider.name] || []}
                       models={models || []}
                       defaults={defaults || null}
                       allCredentials={credentials || []}
@@ -1559,9 +1618,9 @@ export default function ApiKeysPage() {
                 <div className="grid gap-4">
                   {localProviders.map(provider => (
                     <ProviderSection
-                      key={provider}
-                      provider={provider}
-                      credentials={credentialsByProvider[provider] || []}
+                      key={provider.name}
+                      provider={provider.name}
+                      credentials={credentialsByProvider[provider.name] || []}
                       models={models || []}
                       defaults={defaults || null}
                       allCredentials={credentials || []}

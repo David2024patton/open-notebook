@@ -4,7 +4,6 @@ AI-powered source discovery that finds relevant web sources
 based on notebook content or search queries.
 """
 
-import asyncio
 import json
 import traceback
 from typing import Optional
@@ -14,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from open_notebook.ai.models import Model
-from open_notebook.database.repository import repo_query, ensure_record_id
+from open_notebook.database.repository import ensure_record_id, repo_query
 
 router = APIRouter()
 
