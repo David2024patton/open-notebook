@@ -220,14 +220,18 @@ async def _define_user_scope() -> None:
         )
         return
 
+    # SurrealDB's DEFINE SCOPE ... KEY expects a string literal, not a bind
+    # parameter, so interpolate the (server-side, trusted) secret directly.
+    # Escape single quotes to avoid breaking the statement.
+    safe_secret = secret.replace("'", "\\'")
     scope_sql = (
-        "DEFINE SCOPE IF NOT EXISTS user_scope "
-        "TYPE JWT ALGO HS256 KEY $secret "
-        "CLAIM sub AS id, CLAIM role AS role;"
+        f"DEFINE SCOPE IF NOT EXISTS user_scope "
+        f"TYPE JWT ALGO HS256 KEY '{safe_secret}' "
+        f"CLAIM sub AS id, CLAIM role AS role;"
     )
     try:
         async with db_connection() as conn:
-            await conn.query(scope_sql, {"secret": secret})
+            await conn.query(scope_sql)
         logger.success("Defined SurrealDB user_scope for native multi-tenancy")
     except Exception as e:
         logger.error(f"Failed to define user_scope: {str(e)}")

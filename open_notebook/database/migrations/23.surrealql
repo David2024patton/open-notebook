@@ -15,6 +15,10 @@
 -- gated to admins/superusers (users may read their own row). `notification`
 -- and `user_totp` are strictly private (keyed by for_user / user_id).
 --
+-- Owner stamping: performed by the application bridge (repository.stamp_owner,
+-- populated from the per-request contextvar) — NOT by a field DEFAULT, because
+-- $auth is not available inside field VALUE/DEFAULT clauses in SurrealDB.
+--
 -- Root (migrations, health, internal jobs) bypasses these permissions, so the
 -- backfill below and all startup work run unimpeded.
 --
@@ -23,8 +27,22 @@
 -- environment secret and must not be committed to this file.
 
 -- ===========================================================================
--- 1. is_global flag on the core knowledge tables (Brain Cells can be shared)
+-- 1. Ensure tenant tables exist (no-op on an already-migrated database) and
+--    add the is_global flag + owner field. Permissions are applied in step 2.
 -- ===========================================================================
+DEFINE TABLE IF NOT EXISTS notebook SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS source SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS note SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS source_embedding SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS source_insight SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS chat_session SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS notification SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS user_totp SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS user SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS referral_code SCHEMAFULL;
+DEFINE TABLE IF NOT EXISTS signup_request SCHEMAFULL;
+
+-- is_global flag on the core knowledge tables (Brain Cells can be shared)
 DEFINE FIELD IF NOT EXISTS is_global ON notebook TYPE bool VALUE $value OR false;
 DEFINE FIELD IF NOT EXISTS is_global ON source TYPE bool VALUE $value OR false;
 DEFINE FIELD IF NOT EXISTS is_global ON note TYPE bool VALUE $value OR false;
@@ -32,109 +50,90 @@ DEFINE FIELD IF NOT EXISTS is_global ON source_embedding TYPE bool VALUE $value 
 DEFINE FIELD IF NOT EXISTS is_global ON source_insight TYPE bool VALUE $value OR false;
 DEFINE FIELD IF NOT EXISTS is_global ON chat_session TYPE bool VALUE $value OR false;
 
--- ===========================================================================
--- 2. owner field on child tables (notebook.owner already added in migration 18)
---    VALUE $value OR $auth.id auto-stamps the scope identity on create
---    (defense-in-depth; the app also stamps owner explicitly via the bridge).
--- ===========================================================================
-DEFINE FIELD IF NOT EXISTS owner ON notebook TYPE option<record<user>> VALUE $value OR $auth.id;
-DEFINE FIELD IF NOT EXISTS owner ON source TYPE option<record<user>> VALUE $value OR $auth.id;
-DEFINE FIELD IF NOT EXISTS owner ON note TYPE option<record<user>> VALUE $value OR $auth.id;
-DEFINE FIELD IF NOT EXISTS owner ON source_embedding TYPE option<record<user>> VALUE $value OR $auth.id;
-DEFINE FIELD IF NOT EXISTS owner ON source_insight TYPE option<record<user>> VALUE $value OR $auth.id;
-DEFINE FIELD IF NOT EXISTS owner ON chat_session TYPE option<record<user>> VALUE $value OR $auth.id;
+-- owner field on all tenant tables (notebook.owner was added in migration 18).
+-- No VALUE default: owner is stamped by the app bridge at create time.
+DEFINE FIELD IF NOT EXISTS owner ON notebook TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS owner ON source TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS owner ON note TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS owner ON source_embedding TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS owner ON source_insight TYPE option<record<user>>;
+DEFINE FIELD IF NOT EXISTS owner ON chat_session TYPE option<record<user>>;
 
 -- ===========================================================================
--- 3. Record-level permissions on tenant-owned tables
+-- 2. Apply record-level permissions. The table already exists, so this
+--    DEFINE TABLE (without IF NOT EXISTS) sets PERMISSIONS on it.
 -- ===========================================================================
 
-DEFINE TABLE IF NOT EXISTS notebook SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE notebook PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS source SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE source PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS note SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE note PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS source_embedding SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE source_embedding PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS source_insight SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE source_insight PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS chat_session SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE chat_session PERMISSIONS FOR
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
--- ===========================================================================
--- 4. Strictly private tables (never shared, no admin cross-access)
--- ===========================================================================
+-- Strictly private tables (never shared, no admin cross-access)
+DEFINE TABLE notification PERMISSIONS FOR
+  select WHERE for_user = $auth.id
+  create WHERE $auth.id IS NOT NONE
+  update WHERE for_user = $auth.id
+  delete WHERE for_user = $auth.id;
 
-DEFINE TABLE IF NOT EXISTS notification SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE for_user = $auth.id
-    create WHERE $auth.id IS NOT NONE
-    update WHERE for_user = $auth.id
-    delete WHERE for_user = $auth.id;
+DEFINE TABLE user_totp PERMISSIONS FOR
+  select WHERE user_id = $auth.id
+  create WHERE $auth.id IS NOT NONE
+  update WHERE user_id = $auth.id
+  delete WHERE user_id = $auth.id;
 
-DEFINE TABLE IF NOT EXISTS user_totp SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE user_id = $auth.id
-    create WHERE $auth.id IS NOT NONE
-    update WHERE user_id = $auth.id
-    delete WHERE user_id = $auth.id;
+-- Management tables (admin/superuser operated; users read their own row)
+DEFINE TABLE user PERMISSIONS FOR
+  select WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.role IN ['admin', 'superuser']
+  update WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
+  delete WHERE $auth.role IN ['admin', 'superuser'];
 
--- ===========================================================================
--- 5. Management tables (admin/superuser operated; users read their own row)
--- ===========================================================================
+DEFINE TABLE referral_code PERMISSIONS FOR
+  select WHERE created_by = $auth.id OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.role IN ['admin', 'superuser']
+  update WHERE $auth.role IN ['admin', 'superuser']
+  delete WHERE $auth.role IN ['admin', 'superuser'];
 
-DEFINE TABLE IF NOT EXISTS user SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.role IN ['admin', 'superuser']
-    update WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
-    delete WHERE $auth.role IN ['admin', 'superuser'];
-
-DEFINE TABLE IF NOT EXISTS referral_code SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE created_by = $auth.id OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.role IN ['admin', 'superuser']
-    update WHERE $auth.role IN ['admin', 'superuser']
-    delete WHERE $auth.role IN ['admin', 'superuser'];
-
-DEFINE TABLE IF NOT EXISTS signup_request SCHEMAFULL
-  PERMISSIONS FOR
-    select WHERE username = $auth.username OR $auth.role IN ['admin', 'superuser']
-    create WHERE $auth.id IS NOT NONE
-    update WHERE $auth.role IN ['admin', 'superuser']
-    delete WHERE $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE signup_request PERMISSIONS FOR
+  select WHERE username = $auth.username OR $auth.role IN ['admin', 'superuser']
+  create WHERE $auth.id IS NOT NONE
+  update WHERE $auth.role IN ['admin', 'superuser']
+  delete WHERE $auth.role IN ['admin', 'superuser'];
 
 -- ===========================================================================
--- 6. One-time backfill: assign orphaned tenant records to the first superuser
+-- 3. One-time backfill: assign orphaned tenant records to the first superuser
 --    so pre-multi-tenancy data is not lost behind the new permissions wall.
 -- ===========================================================================
 LET $superuser = SELECT VALUE id FROM ONLY user WHERE role = 'superuser' ORDER BY created ASC LIMIT 1;
