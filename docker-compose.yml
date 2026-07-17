@@ -7,8 +7,10 @@ services:
     # open_notebook service below, so the two always stay in sync.
     command: start --log info --user ${SURREAL_USER:-root} --pass ${SURREAL_PASSWORD:-root} rocksdb:/mydata/mydatabase.db
     user: root  # Required for bind mounts on Linux
+    # Bind to loopback only: the app connects over the internal Docker network
+    # (ws://surrealdb:8000); the DB must never be reachable on the public VPS.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./surreal_data:/mydata
     environment:
@@ -28,12 +30,15 @@ services:
   open_notebook:
     build: .
     image: open-notebook:latest
+    # All ports bound to 127.0.0.1 so nothing is public on the VPS. Only the
+    # Dokploy-managed Traefik reverse proxy reaches the container (by name on
+    # the shared Docker network) and exposes it at brain.itak.live with auto
+    # Let's Encrypt TLS. Locally, 127.0.0.1:8502 still works exactly as before.
     ports:
-      - "8502:8502"  # Web UI (public)
+      - "127.0.0.1:8502:8502"  # Web UI (loopback only — Traefik fronts it)
       # NOTE: 5055 (REST API) is intentionally NOT published. It is reached
-      # internally by the frontend and, on a VPS, proxied by the reverse proxy
-      # (see Phase 2). Do not expose it directly to the internet.
-      - "2222:2222"  # SSH (optional; restrict in production)
+      # internally by the frontend. Do not expose it directly to the internet.
+      - "127.0.0.1:2222:2222"  # SSH (loopback only; not public)
     environment:
       # REQUIRED secrets — set these in a .env file before deploying. The
       # ${VAR:?...} syntax makes Compose fail fast with a clear message if a
