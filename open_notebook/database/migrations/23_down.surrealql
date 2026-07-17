@@ -1,0 +1,34 @@
+-- Migration 23 rollback: remove native multi-tenancy enforcement.
+--
+-- Removes the record-level PERMISSIONS and the is_global / owner field
+-- definitions added in 23.surrealql. The `user_scope` itself is removed at
+-- runtime by api/main.py on startup (or left as a harmless no-op). Orphan
+-- backfill is not reversed — ownership is preserved.
+
+-- 1. Drop permissions (revert to default FULL access for all sessions)
+DEFINE TABLE IF NOT EXISTS notebook SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS source SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS note SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS source_embedding SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS source_insight SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS chat_session SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS notification SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS user_totp SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS user SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS referral_code SCHEMAFULL PERMISSIONS NONE;
+DEFINE TABLE IF NOT EXISTS signup_request SCHEMAFULL PERMISSIONS NONE;
+
+-- 2. Remove the is_global and owner field definitions
+REMOVE FIELD IF EXISTS is_global ON TABLE notebook;
+REMOVE FIELD IF EXISTS is_global ON TABLE source;
+REMOVE FIELD IF EXISTS is_global ON TABLE note;
+REMOVE FIELD IF EXISTS is_global ON TABLE source_embedding;
+REMOVE FIELD IF EXISTS is_global ON TABLE source_insight;
+REMOVE FIELD IF EXISTS is_global ON TABLE chat_session;
+
+REMOVE FIELD IF EXISTS owner ON TABLE notebook;
+REMOVE FIELD IF EXISTS owner ON TABLE source;
+REMOVE FIELD IF EXISTS owner ON TABLE note;
+REMOVE FIELD IF EXISTS owner ON TABLE source_embedding;
+REMOVE FIELD IF EXISTS owner ON TABLE source_insight;
+REMOVE FIELD IF EXISTS owner ON TABLE chat_session;

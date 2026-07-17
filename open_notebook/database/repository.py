@@ -1,12 +1,24 @@
 import os
 import re
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
 from loguru import logger
 from surrealdb import AsyncSurreal, RecordID  # type: ignore
 from surrealdb.data.types.table import Table  # type: ignore
+
+# Per-request JWT (set by the auth middleware / request bridge). When present,
+# db_connection() signs into the `user_scope` so SurrealDB record permissions
+# are enforced against the authenticated user ($auth.id / $auth.role). When
+# absent (startup migrations, health checks, internal jobs), the connection
+# signs in as the root database user, which bypasses record permissions.
+current_jwt: ContextVar[Optional[str]] = ContextVar("current_jwt", default=None)
+# Per-request owner record id (the user's `user:*` record id), used to stamp
+# `owner` on tenant records at create time as defense-in-depth alongside the
+# `VALUE $value OR $auth.id` schema default.
+current_owner_id: ContextVar[Optional[str]] = ContextVar("current_owner_id", default=None)
 
 T = TypeVar("T", Dict[str, Any], List[Dict[str, Any]])
 
@@ -75,16 +87,56 @@ def ensure_record_id(value: Union[str, RecordID]) -> RecordID:
     return RecordID.parse(value)
 
 
+# Tables that carry tenant ownership and must be stamped with `owner`.
+TENANT_TABLES = frozenset(
+    {
+        "notebook",
+        "source",
+        "note",
+        "source_embedding",
+        "source_insight",
+        "chat_session",
+    }
+)
+
+
+def stamp_owner(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Stamp `owner` on a tenant record when a request user is in context and the
+    caller did not set it explicitly. Defense-in-depth on top of the schema
+    `VALUE $value OR $auth.id` default so ownership can never be forgotten.
+    """
+    if table in TENANT_TABLES and "owner" not in data:
+        owner = current_owner_id.get()
+        if owner:
+            data["owner"] = ensure_record_id(owner)
+    return data
+
+
 @asynccontextmanager
 async def db_connection():
     db = AsyncSurreal(get_database_url())
-    await db.signin(
-        {
-            "username": os.environ.get("SURREAL_USER"),
-            "password": get_database_password(),
-        }
-    )
-    await db.use(get_database_namespace(), get_database_name())
+    jwt = current_jwt.get()
+    if jwt:
+        # Scope-authenticated session: SurrealDB enforces record-level
+        # PERMISSIONS against $auth.id / $auth.role derived from the JWT.
+        await db.signin(
+            {
+                "username": os.environ.get("SURREAL_USER"),
+                "password": get_database_password(),
+            }
+        )
+        await db.use(get_database_namespace(), get_database_name())
+        await db.authenticate(jwt)
+    else:
+        # Root session: bypasses record permissions (migrations, health, jobs).
+        await db.signin(
+            {
+                "username": os.environ.get("SURREAL_USER"),
+                "password": get_database_password(),
+            }
+        )
+        await db.use(get_database_namespace(), get_database_name())
     try:
         yield db
     finally:
@@ -117,6 +169,7 @@ async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     data.pop("id", None)
     data["created"] = datetime.now(timezone.utc)
     data["updated"] = datetime.now(timezone.utc)
+    data = stamp_owner(table, data)
     try:
         async with db_connection() as connection:
             result = parse_record_ids(await connection.insert(table, data))
