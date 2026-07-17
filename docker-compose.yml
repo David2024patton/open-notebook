@@ -7,7 +7,10 @@ services:
     # open_notebook service below, so the two always stay in sync.
     # List (exec) form so each interpolated value stays a single argument —
     # a password containing spaces would otherwise be split into several.
-    command: ["start", "--log", "info", "--user", "${SURREAL_USER:-root}", "--pass", "${SURREAL_PASSWORD:-root}", "rocksdb:/mydata/mydatabase.db"]
+    command: ["start", "--log", "info", "--user", "${SURREAL_USER:-root}", "--pass", "${SURREAL_PASSWORD:-root}", "rocksdb:/mydata/clean.db"]
+    # DIAGNOSTIC (temporary): pointed at a fresh rocksdb file (clean.db) to
+    # bypass a corrupted mydatabase.db left by earlier broken migration 23
+    # runs. All data is reset; migrations 1-23 re-run from scratch.
     user: root  # Required for bind mounts on Linux
     # Bind to loopback only: the app connects over the internal Docker network
     # (ws://surrealdb:8000); the DB must never be reachable on the public VPS.
