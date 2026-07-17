@@ -449,8 +449,6 @@ class _DiagMiddleware:
             await send({"type": "http.response.body", "body": body})
 
 
-app.add_middleware(_DiagMiddleware)
-
 app.add_middleware(MaxBodySizeMiddleware, max_body_size=MAX_UPLOAD_SIZE_BYTES)
 
 # Add CORS middleware last (so it processes first, and so it can attach
@@ -472,6 +470,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# DIAGNOSTIC (temporary): outermost middleware must be LAST-added so it wraps
+# every other middleware and the app, returning any exception's traceback.
+app.add_middleware(_DiagMiddleware)
 
 
 # Custom exception handler to ensure CORS headers are included in error responses
