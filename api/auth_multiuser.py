@@ -68,13 +68,29 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: str, username: str, role: str) -> str:
-    """Create a JWT access token."""
+    """
+    Create a JWT access token.
+
+    Carries both app claims (sub/username/role) and SurrealDB record-user claims
+    (ns/db/ac/id) so the same token authenticates the app AND opens a scoped
+    SurrealDB session (Phase 2.5: DB-native tenant isolation via
+    DEFINE ACCESS user_scope ... TYPE RECORD WITH JWT). The `id` claim is the
+    user's record id (e.g. "user:abc..."); `ac` is the access-method name
+    ("user_scope"); `ns`/`db` match the SurrealDB namespace/database so SurrealDB
+    accepts the token only for the intended database.
+    """
     secret = get_jwt_secret()
     expire = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
     payload = {
+        # app claims
         "sub": user_id,
         "username": username,
         "role": role,
+        # SurrealDB record-user claims (read by DEFINE ACCESS user_scope)
+        "id": user_id,
+        "ac": "user_scope",
+        "ns": os.getenv("SURREAL_NAMESPACE", "open_notebook"),
+        "db": os.getenv("SURREAL_DB", "open_notebook"),
         "exp": expire,
         "iat": datetime.utcnow(),
     }

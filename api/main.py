@@ -198,13 +198,22 @@ async def _run_database_migrations() -> None:
 # =============================================================================
 # Phase 2.5: native SurrealDB multi-tenancy.
 #
-# The `user_scope` JWT scope is defined dynamically at startup (its HMAC key is
-# an environment secret and must not be committed). DEFINE SCOPE ... TYPE JWT
-# with KEY <secret> makes SurrealDB validate incoming JWTs and populate $auth
-# (id/role) for the connection, which migration 23 PERMISSIONS then enforce.
+# The `user_scope` RECORD access method is defined dynamically at startup (its
+# HMAC key is an environment secret and must not be committed). SurrealDB v2
+# requires `DEFINE ACCESS ... TYPE RECORD WITH JWT` (the legacy `DEFINE SCOPE`
+# is deprecated) so the token bearer is treated as a RECORD user — the only
+# user class for which table/field PERMISSIONS are enforced. A plain
+# `TYPE JWT` access method would grant system-user access and bypass
+# migration 23 PERMISSIONS, defeating tenant isolation.
+#
+# The token's `id` claim (the user record id, e.g. "user:abc...") populates
+# $auth from the matched user record's fields, so $auth.id and $auth.role
+# resolve to the record's values. The AUTHENTICATE clause additionally
+# requires the user record's `is_active` field to be true. Token lifetime 1h,
+# session lifetime 24h (see DURATION FOR TOKEN / FOR SESSION).
 # =============================================================================
 async def _define_user_scope() -> None:
-    """Define the user_scope JWT scope in SurrealDB using the live JWT secret."""
+    """Define the user_scope RECORD access method (SurrealDB v2) with the live JWT secret."""
     from open_notebook.database.repository import db_connection
 
     secret = get_jwt_secret()
@@ -212,13 +221,18 @@ async def _define_user_scope() -> None:
     # literal (apostrophes doubled). The secret is never logged.
     escaped = secret.replace("'", "''")
     define_sql = (
-        "DEFINE SCOPE OVERWRITE user_scope TYPE JWT "
-        f"ALGORITHM HS256 KEY '{escaped}';"
+        "DEFINE ACCESS OVERWRITE user_scope ON DATABASE TYPE RECORD WITH JWT "
+        f"ALGORITHM HS256 KEY '{escaped}' "
+        "AUTHENTICATE { "
+        "  IF $auth.is_active != true { THROW \"Account is disabled\" }; "
+        "  RETURN $auth "
+        "} "
+        "DURATION FOR TOKEN 1h, FOR SESSION 24h;"
     )
     try:
         async with db_connection() as db:
             await db.query(define_sql)
-        logger.info("Defined SurrealDB user_scope (JWT HS256) for tenant isolation")
+        logger.info("Defined SurrealDB user_scope (RECORD WITH JWT HS256) for tenant isolation")
     except Exception as e:
         # Avoid leaking the secret: only log the error class, not the SQL.
         logger.error(f"Failed to define user_scope: {type(e).__name__}")

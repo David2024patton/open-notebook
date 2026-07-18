@@ -104,27 +104,29 @@ def ensure_record_id(value: Union[str, RecordID]) -> RecordID:
 async def db_connection():
     db = AsyncSurreal(get_database_url())
     jwt = current_jwt.get()
-    # DB-enforced scope isolation is opt-in (OPEN_NOTEBOOK_DB_SCOPE_AUTH=1).
-    # Until the SurrealDB v2 ACCESS JWT auth model is fully wired, the app
-    # connects as root (root bypasses migration 23 PERMISSIONS) and isolation
-    # is enforced at the app layer (JWT middleware + owner stamping).
+    # DB-enforced tenant isolation is opt-in (OPEN_NOTEBOOK_DB_SCOPE_AUTH=1).
+    # When enabled, a per-request JWT (issued at login, carrying ns/db/ac/id
+    # claims) is presented to SurrealDB via db.authenticate(token). SurrealDB
+    # v2 validates it against DEFINE ACCESS user_scope ... TYPE RECORD WITH
+    # JWT, treats the bearer as a RECORD user, and enforces migration 23
+    # PERMISSIONS for every query on this connection. When disabled (or for
+    # startup/migrations/worker with no JWT), connect as root — root bypasses
+    # PERMISSIONS, and isolation is instead enforced at the app layer.
     scope_auth_enabled = os.environ.get("OPEN_NOTEBOOK_DB_SCOPE_AUTH") == "1"
+    await db.use(get_database_namespace(), get_database_name())
     if jwt and scope_auth_enabled:
-        # Tenant-scoped session: sign in through the user_scope JWT scope so
-        # $auth.id / $auth.role are populated and migration 23 PERMISSIONS are
-        # enforced for this connection.
-        await db.signin({"scope": "user_scope", "token": jwt})
-        await db.use(get_database_namespace(), get_database_name())
+        # Tenant-scoped record-user session. authenticate() validates the
+        # externally-issued JWT against the user_scope access method; the
+        # `id` claim populates $auth from the matched user record.
+        await db.authenticate(jwt)
     else:
-        # Root session: used by startup migrations, the worker, and internal
-        # jobs that must bypass tenant PERMISSIONS.
+        # Root session: bypasses PERMISSIONS (startup, worker, internal jobs).
         await db.signin(
             {
                 "username": os.environ.get("SURREAL_USER"),
                 "password": get_database_password(),
             }
         )
-        await db.use(get_database_namespace(), get_database_name())
     try:
         yield db
     finally:
@@ -161,9 +163,11 @@ async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     # pointing at the current request's user, so migration 23 PERMISSIONS
     # enforce isolation. The owner is stamped here (not via a field DEFAULT)
     # because $auth is unavailable inside field VALUE/DEFAULT clauses.
+    # The owner is FORCED (overwriting any client-supplied value) so a tenant
+    # cannot create records owned by another tenant.
     if table in TENANT_TABLES:
         owner = current_owner_id.get()
-        if owner and "owner" not in data:
+        if owner:
             data["owner"] = RecordID("user", owner) if ":" not in owner else owner
     try:
         async with db_connection() as connection:
