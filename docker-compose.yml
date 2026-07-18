@@ -91,9 +91,12 @@ services:
       # - OPEN_NOTEBOOK_WORKER_MAX_TASKS=1
     # NOTE: no /app/data bind mount. The host bind source got into a read-only /
     # missing state that made /app/data unwritable and crashed the api at
-    # startup (mkdir /app/data/.cache failed). Without the mount, /app/data
-    # is the image's own writable directory, so the api comes up. Caches
-    # (UV_CACHE_DIR etc.) are redirected to /tmp by supervisord.
+    # startup (mkdir /app/data/.cache failed). Instead we mount a tmpfs at
+    # /app/data: a writable in-memory directory (no host mount, no read-only
+    # issue). Caches (UV_CACHE_DIR etc.) are redirected to /tmp by supervisord.
+    # The tmpfs also forces Docker Compose to recreate the container on deploy.
+    tmpfs:
+      - /app/data
     depends_on:
       - surrealdb
     restart: always
