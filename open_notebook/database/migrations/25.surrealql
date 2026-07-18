@@ -1,0 +1,28 @@
+-- Migration 25: Passwordless OTP login — login_code table.
+--
+-- Stores one-time 6-digit login codes (hashed) keyed by email, with expiry
+-- and attempt limiting. Root-only: codes are written/read by the application
+-- under a root (non-scoped) SurrealDB session; record-user sessions have
+-- NO access (PERMISSIONS NONE). A code is consumed on successful verify and
+-- expired rows are pruned by the app.
+
+DEFINE TABLE IF NOT EXISTS login_code SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS email ON login_code TYPE string;
+DEFINE FIELD IF NOT EXISTS code_hash ON login_code TYPE string;
+DEFINE FIELD IF NOT EXISTS attempts ON login_code TYPE int VALUE $value OR 0;
+DEFINE FIELD IF NOT EXISTS consumed ON login_code TYPE bool VALUE $value OR false;
+DEFINE FIELD IF NOT EXISTS created ON login_code TYPE datetime;
+DEFINE FIELD IF NOT EXISTS expires ON login_code TYPE datetime;
+-- DEV-MODE only: the plaintext code is stored here so the superuser debug
+-- endpoint can surface it without SMTP. Storing plaintext here is acceptable
+-- because the table is root-only (PERMISSIONS NONE for record users). A
+-- production email sender would leave this field empty.
+DEFINE FIELD IF NOT EXISTS dev_code ON login_code TYPE option<string>;
+
+-- Root-only: the app reads/writes codes as root; no record-user access.
+DEFINE TABLE OVERWRITE login_code SCHEMAFULL
+PERMISSIONS
+  FOR select, create, update, delete NONE;
+
+-- Index for fast lookup of the latest live code per email.
+DEFINE INDEX IF NOT EXISTS email_live ON login_code FIELDS email;

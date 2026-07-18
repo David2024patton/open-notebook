@@ -33,3 +33,11 @@ class ContentSettings(RecordModel):
     enforce_2fa: Optional[Literal["yes", "no"]] = Field(
         "no", description="Require all users to enable two-factor authentication"
     )
+    require_signup_approval: Optional[Literal["yes", "no"]] = Field(
+        "yes",
+        description=(
+            "When 'yes', new signups require admin/superuser approval before "
+            "they can log in. When 'no', new signups are auto-approved. "
+            "Passwordless OTP login uses this gate."
+        ),
+    )

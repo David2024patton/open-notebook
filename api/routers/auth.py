@@ -20,6 +20,8 @@ from api.auth_multiuser import (
     hash_password,
     verify_password,
 )
+from open_notebook.domain.content_settings import ContentSettings
+from open_notebook.domain.login_code import issue_code, latest_dev_code, verify_code
 from open_notebook.domain.referral_code import ReferralCode
 from open_notebook.domain.signup_request import SignupRequest
 from open_notebook.domain.user import ROLES, User
@@ -35,6 +37,42 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: Optional[str] = None
     referral_code: Optional[str] = None
+
+
+class RequestCodeRequest(BaseModel):
+    email: str
+
+    @field_validator('email')
+    @classmethod
+    def email_must_have_at(cls, v: str) -> str:
+        if '@' not in (v or ''):
+            raise ValueError('Must be a valid email address')
+        return v.strip().lower()
+
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str = Field(..., min_length=6, max_length=6)
+
+    @field_validator('email')
+    @classmethod
+    def email_must_have_at(cls, v: str) -> str:
+        if '@' not in (v or ''):
+            raise ValueError('Must be a valid email address')
+        return v.strip().lower()
+
+    @field_validator('code')
+    @classmethod
+    def code_is_digits(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError('Code must be 6 digits')
+        return v
+
+
+class PasswordlessRegisterRequest(BaseModel):
+    email: EmailStr
+    display_name: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -463,6 +501,172 @@ async def login(request: LoginRequest):
             updated=str(user.updated) if user.updated else None,
         ),
     )
+
+
+# =============================================================================
+# Passwordless OTP login (Phase 2.5+). Email -> 6-digit code -> JWT.
+# Codes are written/read as root (pre-auth, no JWT). The legacy password
+# `/login` above remains for backward compatibility but the frontend uses the
+# code flow; password-based accounts can still log in via code too (the code is
+# emailed regardless of whether a password is set).
+# =============================================================================
+@router.post("/request-code")
+async def request_login_code(request: RequestCodeRequest):
+    """
+    Request a 6-digit login code be sent to `email`.
+
+    Always returns 202 (never leaks whether the email corresponds to an
+    active account). The code is emailed (dev-mode: logged + stored for the
+    debug endpoint). The user enters the code at /verify-code.
+    """
+    if AUTH_MODE != "multi-user":
+        raise HTTPException(
+            status_code=400,
+            detail="Multi-user mode not enabled.",
+        )
+    # Only issue for an existing, active user. Unknown/inactive emails get a
+    # 202 anyway (no leak).
+    user = await User.get_by_email(request.email)
+    if user and user.is_active:
+        await issue_code(request.email)
+    return {"status": "accepted", "message": "If that account exists, a code has been sent."}
+
+
+@router.post("/verify-code")
+async def verify_login_code(request: VerifyCodeRequest):
+    """
+    Verify a 6-digit code and issue a JWT (passwordless login).
+
+    On success returns the same TokenResponse shape as /login. On failure
+    returns 401 with a generic message (no code/existence leak).
+    """
+    if AUTH_MODE != "multi-user":
+        raise HTTPException(
+            status_code=400,
+            detail="Multi-user mode not enabled.",
+        )
+    user_id = await verify_code(request.email, request.code)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired code")
+    user = await User.get(user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid or expired code")
+    access_token = create_access_token(
+        user_id=user.id or "",
+        username=user.username,
+        role=user.role,
+    )
+    logger.info(f"User logged in via OTP: {user.username}")
+    return TokenResponse(
+        access_token=access_token,
+        user=UserResponse(
+            id=user.id or "",
+            username=user.username,
+            email=user.email,
+            display_name=user.display_name,
+            role=user.role,
+            is_active=user.is_active,
+            requires_approval=user.requires_approval,
+            referred_by=user.referred_by,
+            avatar_url=user.avatar_url,
+            avatar_color=user.avatar_color,
+            created=str(user.created) if user.created else None,
+            updated=str(user.updated) if user.updated else None,
+        ),
+    )
+
+
+@router.get("/signup-policy")
+async def get_signup_policy():
+    """Public: whether new signups require admin approval (frontend UX hint)."""
+    require_approval = True
+    try:
+        settings = await ContentSettings.get_instance()
+        require_approval = (settings.require_signup_approval != "no")
+    except Exception:  # noqa: BLE001 - default to safest policy on error
+        require_approval = True
+    return {"require_approval": require_approval}
+
+
+@router.post("/register-code")
+async def register_passwordless(request: PasswordlessRegisterRequest):
+    """
+    Passwordless signup request. Email only (no password). Behaviour depends
+    on the superuser-controlled `require_signup_approval` setting:
+      - 'no'  -> auto-approve: create an active user (role=user) immediately
+                 and email a login code so they can sign in right away.
+      - 'yes' -> create a pending SignupRequest for admin/superuser approval
+                 (the user is created at approval time, then logs in by code).
+    Always returns 202 to avoid leaking whether the email is already taken.
+    """
+    if AUTH_MODE != "multi-user":
+        raise HTTPException(
+            status_code=400,
+            detail="Multi-user mode not enabled.",
+        )
+    username = request.email.strip().lower()
+    # Idempotent: if an active user already exists, do nothing (no leak).
+    existing = await User.get_by_email(username)
+    if not existing:
+        require_approval = True
+        try:
+            settings = await ContentSettings.get_instance()
+            require_approval = (settings.require_signup_approval != "no")
+        except Exception:  # noqa: BLE001
+            require_approval = True
+        if not require_approval:
+            # Auto-approve: create the user immediately. No password — they
+            # log in via code. A placeholder password_hash is stored (bcrypt
+            # of a high-entropy secret the user never knows) so the legacy
+            # password /login path can't be used for this account.
+            import secrets as _secrets
+
+            placeholder = hash_password(_secrets.token_urlsafe(32))
+            await repo_create_user(username, request.display_name, placeholder)
+            await issue_code(username)
+        else:
+            # Pending approval: create a SignupRequest for admin review.
+            import secrets as _secrets
+
+            pending = await SignupRequest.get_by_username(username)
+            if not pending or pending.status != "pending":
+                signup_request = SignupRequest(
+                    username=username,
+                    email=username,
+                    password_hash=hash_password(_secrets.token_urlsafe(32)),
+                    display_name=request.display_name or username,
+                )
+                await signup_request.save()
+    return {
+        "status": "accepted",
+        "message": "If that email is available, your request has been received.",
+    }
+
+
+async def repo_create_user(username: str, display_name: Optional[str], password_hash: str) -> User:
+    """Helper: create a user record directly (used by auto-approve signup)."""
+    user = User(
+        username=username,
+        email=username,
+        password_hash=password_hash,
+        display_name=display_name or username,
+        role="user",
+        is_active=True,
+        requires_approval=False,
+    )
+    await user.save()
+    return user
+
+
+@router.get("/_debug/otp-latest")
+async def debug_latest_otp(email: str, current_user: User = Depends(require_role("superuser"))):
+    """
+    DEV-MODE only: return the latest unconsumed login code for an email so a
+    superuser can grab it during testing without SMTP. Gated to superusers.
+    Remove or gate behind a non-production env flag before real email is wired.
+    """
+    code = await latest_dev_code(email.strip().lower())
+    return {"email": email, "code": code}
 
 
 @router.post("/login/2fa")

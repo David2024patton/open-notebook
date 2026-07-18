@@ -1,0 +1,2 @@
+-- Down migration for 25: remove the login_code table and its index.
+REMOVE TABLE IF EXISTS login_code;

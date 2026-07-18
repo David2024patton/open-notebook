@@ -25,6 +25,7 @@ async def get_settings():
             docling_ocr=settings.docling_ocr,
             youtube_preferred_languages=settings.youtube_preferred_languages,
             enforce_2fa=settings.enforce_2fa,
+            require_signup_approval=settings.require_signup_approval,
         )
     except HTTPException:
         raise
@@ -84,6 +85,12 @@ async def update_settings(settings_update: SettingsUpdate):
             settings.enforce_2fa = cast(
                 Literal["yes", "no"], settings_update.enforce_2fa
             )
+        if settings_update.require_signup_approval is not None:
+            from typing import Literal, cast
+
+            settings.require_signup_approval = cast(
+                Literal["yes", "no"], settings_update.require_signup_approval
+            )
 
         await settings.update()
 
@@ -95,6 +102,7 @@ async def update_settings(settings_update: SettingsUpdate):
             docling_ocr=settings.docling_ocr,
             youtube_preferred_languages=settings.youtube_preferred_languages,
             enforce_2fa=settings.enforce_2fa,
+            require_signup_approval=settings.require_signup_approval,
         )
     except HTTPException:
         raise

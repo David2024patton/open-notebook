@@ -281,6 +281,7 @@ class SettingsResponse(BaseModel):
     docling_ocr: Optional[bool] = None
     youtube_preferred_languages: Optional[List[str]] = None
     enforce_2fa: Optional[str] = None
+    require_signup_approval: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -291,6 +292,7 @@ class SettingsUpdate(BaseModel):
     docling_ocr: Optional[bool] = None
     youtube_preferred_languages: Optional[List[str]] = None
     enforce_2fa: Optional[str] = None
+    require_signup_approval: Optional[str] = None
 
 
 # Sources API models
