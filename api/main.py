@@ -212,7 +212,7 @@ async def _define_user_scope() -> None:
     # literal (apostrophes doubled). The secret is never logged.
     escaped = secret.replace("'", "''")
     define_sql = (
-        "DEFINE SCOPE IF NOT EXISTS user_scope TYPE JWT "
+        "DEFINE SCOPE OVERWRITE user_scope TYPE JWT "
         f"ALGORITHM HS256 KEY '{escaped}';"
     )
     try:
@@ -220,7 +220,8 @@ async def _define_user_scope() -> None:
             await db.query(define_sql)
         logger.info("Defined SurrealDB user_scope (JWT HS256) for tenant isolation")
     except Exception as e:
-        logger.error(f"Failed to define user_scope: {str(e)}")
+        # Avoid leaking the secret: only log the error class, not the SQL.
+        logger.error(f"Failed to define user_scope: {type(e).__name__}")
         raise
 
 
