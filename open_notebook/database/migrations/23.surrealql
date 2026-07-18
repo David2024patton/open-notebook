@@ -121,17 +121,11 @@ PERMISSIONS
   FOR update, delete WHERE $auth.role IN ['admin', 'superuser'];
 
 -- ===========================================================================
--- 3. One-time backfill: assign orphaned tenant records to the first superuser
---    so pre-multi-tenancy data is not lost behind the new permissions wall.
+-- 3. One-time backfill (intentionally omitted from this migration).
+--    On a fresh database there are no pre-multi-tenancy records to reassign,
+--    and the first registered user is auto-promoted to superuser by the
+--    application (see api/routers/auth.py register). If orphaned tenant
+--    records ever need reassignment to a superuser, do it via a dedicated
+--    admin script rather than a startup migration, to avoid SURREALQL
+--    control-flow (IF/LET) parse pitfalls during automated migration runs.
 -- ===========================================================================
-LET $superuser = (SELECT VALUE id FROM user WHERE role = 'superuser' LIMIT 1);
-
-IF (array::len($superuser) > 0) THEN
-  LET $su = $superuser[0];
-  UPDATE notebook SET owner = $su WHERE owner IS NONE;
-  UPDATE source SET owner = $su WHERE owner IS NONE;
-  UPDATE note SET owner = $su WHERE owner IS NONE;
-  UPDATE source_embedding SET owner = $su WHERE owner IS NONE;
-  UPDATE source_insight SET owner = $su WHERE owner IS NONE;
-  UPDATE chat_session SET owner = $su WHERE owner IS NONE;
-END;
