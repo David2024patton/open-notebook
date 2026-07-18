@@ -90,10 +90,11 @@ services:
       # LLM setups to avoid overloading the model with parallel requests.
       # - OPEN_NOTEBOOK_WORKER_MAX_TASKS=1
     volumes:
-      # Point at a fresh host dir so Docker creates a clean writable mount
-      # (the old ./notebook_data bind source got into a bad state on the host,
-      # making /app/data unwritable and crashing `uv run` at startup).
-      - ./notebook_data_v2:/app/data
+      # No /app/data bind mount: the host bind source got into a read-only /
+      # missing state that made /app/data unwritable and crashed the api at
+      # startup (mkdir /app/data/.cache failed). Without the mount, /app/data
+      # is the image's own writable directory, so the api comes up. Caches
+      # (UV_CACHE_DIR etc.) are redirected to /tmp by supervisord.
       # Optional: mount your SSH public key for key-based auth
       # Create a file named authorized_keys with your pubkey, then uncomment:
       # - ./authorized_keys:/app/ssh/authorized_keys:ro
