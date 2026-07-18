@@ -3,6 +3,7 @@ Async migration system for SurrealDB using the official Python client.
 Based on patterns from sblpy migration system.
 """
 
+import os
 from typing import List
 
 from loguru import logger
