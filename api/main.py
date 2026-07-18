@@ -375,6 +375,26 @@ app = FastAPI(
 # wraps the whole request pipeline.
 app.add_middleware(RequestTenantBridge)
 
+
+# =============================================================================
+# TEMPORARY DIAGNOSTIC (Phase 2.5): inspect the scoped SurrealDB session.
+# Returns what $auth resolves to under the current request's JWT, so we can
+# verify db.authenticate(token) establishes a record-user session. Remove once
+# scope auth is confirmed working.
+# =============================================================================
+@app.get("/api/_diag/scope")
+async def _diag_scope(request: Request):
+    from open_notebook.database.repository import db_connection, current_jwt
+    jwt = current_jwt.get()
+    try:
+        async with db_connection() as db:
+            auth = await db.query("RETURN $auth")
+            sid = await db.query("RETURN $session")
+        return {"jwt_present": bool(jwt), "auth": auth, "session": sid}
+    except Exception as e:
+        return {"jwt_present": bool(jwt), "error": f"{type(e).__name__}: {e}"}
+
+
 if CORS_IS_DEFAULT_WILDCARD:
     logger.warning(
         "CORS_ORIGINS is not set — API accepts cross-origin requests from any "
