@@ -169,9 +169,13 @@ async def latest_dev_code(email: str) -> Optional[str]:
     )
     if not rows:
         return None
-    # Pick the latest non-consumed, non-expired one; fall back to any.
+    # Prefer the latest non-consumed, non-expired code; fall back to any
+    # non-consumed; only as a last resort a consumed one (so the debug view
+    # still shows something rather than empty when testing a replay).
     live = [r for r in rows if not r.get("consumed")]
-    pool = live or rows
+    now = datetime.now(timezone.utc)
+    fresh = [r for r in live if r.get("expires") and r["expires"] > now]
+    pool = fresh or live or rows
     latest = pool[-1] if pool else None
     if not latest:
         return None

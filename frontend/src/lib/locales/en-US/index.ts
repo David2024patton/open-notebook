@@ -204,9 +204,9 @@ export const enUS = {
   },
   auth: {
     loginTitle: "Cortex",
-    loginDesc: "Enter your password to access the application",
+    loginDesc: "Enter your email and we'll send you a one-time code",
     passwordPlaceholder: "Password",
-    signingIn: "Signing in...",
+    signingIn: "Verifying...",
     signIn: "Sign In",
     connectErrorHint: "Unable to connect to server. Please check if the API is running.",
   },
