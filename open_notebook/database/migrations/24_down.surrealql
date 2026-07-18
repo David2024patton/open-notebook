@@ -1,0 +1,9 @@
+-- Down migration for 24: restore migration 23 PERMISSIONS (uses $auth.role).
+DEFINE TABLE notebook SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
+DEFINE TABLE user SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE $auth.role IN ['admin', 'superuser'];

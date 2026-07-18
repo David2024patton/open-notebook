@@ -1,0 +1,77 @@
+-- Migration 24: Fix tenant PERMISSIONS to avoid $auth field-read circularity.
+--
+-- Migration 23 referenced $auth.role / $auth.id in table PERMISSIONS. To
+-- resolve $auth.<field>, SurrealDB must READ the user record — but that read
+-- is gated by the user table's own select PERMISSION, which itself references
+-- $auth.role. This circular dependency makes $auth.role resolve to NONE for
+-- every record-user session, so EVERY permission check fails and all
+-- tenant-table reads/writes are denied (even for the owner).
+--
+-- Fix: use claims that do NOT require a DB read:
+--   * $auth        — the authenticated record id (RecordID), available with
+--                    no record lookup. Compare with `owner = $auth`.
+--   * $token.role  — the `role` claim taken directly from the verified JWT
+--                    (signed by our HS256 key, so trustworthy), available
+--                    with no record lookup. Replaces $auth.role.
+-- The AUTHENTICATE clause (in api/main.py _define_user_scope) still reads
+-- $auth.is_active at auth time, which works because AUTHENTICATE runs in the
+-- auth context before the session is used for table queries.
+--
+-- This migration redefines the PERMISSIONS on all tenant + management tables
+-- (OVERWRITE) with the corrected expressions. Schema/fields are unchanged.
+
+DEFINE TABLE notebook SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE source SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE note SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE source_embedding SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE source_insight SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE chat_session SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE owner = $auth OR is_global = true OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE owner = $auth OR $token.role IN ['admin', 'superuser'];
+
+-- Strictly private tables (never shared, no admin cross-access)
+DEFINE TABLE notification SCHEMAFULL
+PERMISSIONS
+  FOR select, create, update, delete WHERE for_user = $auth;
+
+DEFINE TABLE user_totp SCHEMAFULL
+PERMISSIONS
+  FOR select, create, update, delete WHERE user_id = $auth;
+
+-- Management tables (admin/superuser operated; users read their own row)
+DEFINE TABLE user SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE id = $auth OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE referral_code SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE created_by = $auth OR $token.role IN ['admin', 'superuser']
+  FOR create, update, delete WHERE $token.role IN ['admin', 'superuser'];
+
+DEFINE TABLE signup_request SCHEMAFULL
+PERMISSIONS
+  FOR select WHERE username = $token.username OR $token.role IN ['admin', 'superuser']
+  FOR create WHERE $auth IS NOT NONE
+  FOR update, delete WHERE $token.role IN ['admin', 'superuser'];
