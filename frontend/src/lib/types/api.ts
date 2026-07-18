@@ -59,6 +59,8 @@ export interface SettingsResponse {
   auto_delete_files?: string
   docling_ocr?: boolean
   youtube_preferred_languages?: string[]
+  enforce_2fa?: string
+  require_signup_approval?: string
 }
 
 export interface Capabilities {

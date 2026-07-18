@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { useSettings, useUpdateSettings } from '@/lib/hooks/use-settings'
 import { useCapabilities } from '@/lib/hooks/use-capabilities'
+import { useAuthStore } from '@/lib/stores/auth-store'
 import { useEffect, useState } from 'react'
 import { ChevronDownIcon } from 'lucide-react'
 import { useTranslation } from '@/lib/hooks/use-translation'
@@ -23,6 +24,7 @@ const settingsSchema = z.object({
   default_embedding_option: z.enum(['ask', 'always', 'never']).optional(),
   auto_delete_files: z.enum(['yes', 'no']).optional(),
   docling_ocr: z.boolean().optional(),
+  require_signup_approval: z.enum(['yes', 'no']).optional(),
 })
 
 type SettingsFormData = z.infer<typeof settingsSchema>
@@ -47,8 +49,10 @@ export function SettingsForm() {
     files: false
   })
   const [hasResetForm, setHasResetForm] = useState(false)
-  
-  
+  // Signup-approval policy is superuser-only; derived from the auth role.
+  const { user } = useAuthStore()
+
+
   const {
     control,
     handleSubmit,
@@ -62,6 +66,7 @@ export function SettingsForm() {
       default_embedding_option: undefined,
       auto_delete_files: undefined,
       docling_ocr: undefined,
+      require_signup_approval: undefined,
     }
   })
 
@@ -78,6 +83,7 @@ export function SettingsForm() {
         default_embedding_option: settings.default_embedding_option as 'ask' | 'always' | 'never',
         auto_delete_files: settings.auto_delete_files as 'yes' | 'no',
         docling_ocr: settings.docling_ocr ?? true,
+        require_signup_approval: (settings.require_signup_approval as 'yes' | 'no' | undefined) ?? 'yes',
       }
       reset(formData)
       setHasResetForm(true)
@@ -305,9 +311,53 @@ export function SettingsForm() {
         </CardContent>
       </Card>
 
+      {user?.role === 'admin' || user?.role === 'superuser' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Signup Policy</CardTitle>
+            <CardDescription>
+              Control whether new users can self-approve via the passwordless
+              login code, or require an admin/superuser to approve each signup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <Label htmlFor="require_approval">Require admin approval for new signups</Label>
+              <Controller
+                name="require_signup_approval"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    key={field.value}
+                    name={field.name}
+                    value={field.value || 'yes'}
+                    onValueChange={field.onChange}
+                    disabled={field.disabled || isLoading}
+                  >
+                    <SelectTrigger id="require_approval" className="w-full">
+                      <SelectValue placeholder="Yes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Yes — admin approves each signup</SelectItem>
+                      <SelectItem value="no">No — new signups are auto-approved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-sm text-muted-foreground">
+                When &quot;Yes&quot;, new email signups create a pending request an
+                admin must approve before the user can log in. When &quot;No&quot;,
+                a new user who verifies their email is auto-approved as role=user
+                and can log in immediately via the emailed code.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="flex justify-end">
-         <Button 
-          type="submit" 
+         <Button
+          type="submit"
           disabled={!isDirty || updateSettings.isPending}
         >
           {updateSettings.isPending ? t('common.saving') : t('common.save')}
