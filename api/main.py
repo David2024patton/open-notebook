@@ -14,8 +14,10 @@ from loguru import logger
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.auth_multiuser import (
+    decode_access_token,
     get_auth_excluded_paths,
     get_auth_middleware,
+    get_jwt_secret,
     is_multi_user_mode,
 )
 from api.middleware import MaxBodySizeMiddleware, get_max_upload_size_bytes
@@ -59,6 +61,7 @@ from api.routers import (
 )
 from api.routers import commands as commands_router
 from open_notebook.database.async_migrate import AsyncMigrationManager
+from open_notebook.database.repository import current_jwt, current_owner_id
 from open_notebook.exceptions import (
     AuthenticationError,
     ConfigurationError,
@@ -192,6 +195,75 @@ async def _run_database_migrations() -> None:
         logger.info("Database is already at the latest version. No migrations needed.")
 
 
+# =============================================================================
+# Phase 2.5: native SurrealDB multi-tenancy.
+#
+# The `user_scope` JWT scope is defined dynamically at startup (its HMAC key is
+# an environment secret and must not be committed). DEFINE SCOPE ... TYPE JWT
+# with KEY <secret> makes SurrealDB validate incoming JWTs and populate $auth
+# (id/role) for the connection, which migration 23 PERMISSIONS then enforce.
+# =============================================================================
+async def _define_user_scope() -> None:
+    """Define the user_scope JWT scope in SurrealDB using the live JWT secret."""
+    from open_notebook.database.repository import db_connection
+
+    secret = get_jwt_secret()
+    # Single-quote-escape the secret so it is embedded as a SurrealQL string
+    # literal (apostrophes doubled). The secret is never logged.
+    escaped = secret.replace("'", "''")
+    define_sql = (
+        "DEFINE SCOPE IF NOT EXISTS user_scope TYPE JWT "
+        f"ALGORITHM HS256 KEY '{escaped}';"
+    )
+    try:
+        async with db_connection() as db:
+            await db.query(define_sql)
+        logger.info("Defined SurrealDB user_scope (JWT HS256) for tenant isolation")
+    except Exception as e:
+        logger.error(f"Failed to define user_scope: {str(e)}")
+        raise
+
+
+class RequestTenantBridge:
+    """
+    Middleware that bridges the request's bearer JWT into the per-request
+    tenant contextvars (current_jwt / current_owner_id) consumed by
+    repository.db_connection(). When a valid JWT is present, subsequent
+    repo_* calls open a scoped SurrealDB session so migration 23 PERMISSIONS
+    are enforced for that user. Requests without a token (login, public
+    endpoints, the worker) fall through to a root session.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode("latin-1")
+        token = None
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
+        if token:
+            # Set the raw token for the scoped SurrealDB session. Also decode
+            # the JWT to carry the subject (user id) so repo_create can stamp
+            # the owner field that migration 23 PERMISSIONS rely on. Decoding
+            # is verified with the live secret; an invalid token is ignored
+            # (the auth middleware will reject the request separately).
+            current_jwt.set(token)
+            try:
+                payload = decode_access_token(token)
+                current_owner_id.set(payload.get("sub"))
+            except Exception:
+                current_owner_id.set(None)
+        else:
+            current_jwt.set(None)
+            current_owner_id.set(None)
+        await self.app(scope, receive, send)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -218,6 +290,17 @@ async def lifespan(app: FastAPI):
         logger.exception(e)
         # Fail fast - don't start the API with an outdated database schema
         raise RuntimeError(f"Failed to run database migrations: {str(e)}") from e
+
+    # Define the user_scope JWT scope for tenant isolation (Phase 2.5). This
+    # must run after migrations (migration 23 defines the PERMISSIONS that the
+    # scope session enforces) and uses the live JWT secret.
+    if is_multi_user_mode():
+        try:
+            await _define_user_scope()
+        except Exception as e:
+            logger.error(f"CRITICAL: Failed to define user_scope: {str(e)}")
+            logger.exception(e)
+            raise RuntimeError(f"Failed to define user_scope: {str(e)}") from e
 
     # Run podcast profile data migration (legacy strings -> Model registry)
     try:
@@ -266,6 +349,11 @@ app = FastAPI(
     description="API for Open Notebook - Research Assistant",
     lifespan=lifespan,
 )
+
+# Tenant bridge: carry the request JWT into per-request contextvars so repo_*
+# calls open a scoped SurrealDB session (Phase 2.5). Registered first so it
+# wraps the whole request pipeline.
+app.add_middleware(RequestTenantBridge)
 
 if CORS_IS_DEFAULT_WILDCARD:
     logger.warning(

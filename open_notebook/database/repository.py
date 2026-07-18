@@ -1,6 +1,7 @@
 import os
 import re
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
@@ -16,6 +17,30 @@ T = TypeVar("T", Dict[str, Any], List[Dict[str, Any]])
 # (SurrealQL only allows binding record/table *values*, not identifiers in
 # that position).
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+# =============================================================================
+# Per-request tenant context (Phase 2.5: native SurrealDB multi-tenancy).
+#
+# The JWT issued at login populates these contextvars via the
+# RequestTenantBridge middleware in api/main.py. db_connection() reads
+# current_jwt to decide whether to open a scoped (tenant-isolated) session
+# or a root session (startup migrations, the worker, internal jobs).
+# =============================================================================
+current_jwt: ContextVar[Optional[str]] = ContextVar("current_jwt", default=None)
+current_owner_id: ContextVar[Optional[str]] = ContextVar("current_owner_id", default=None)
+
+# Tables that participate in tenant isolation (owner-stamped + PERMISSIONS).
+# Keep in sync with migration 23.
+TENANT_TABLES = frozenset(
+    {
+        "notebook",
+        "source",
+        "note",
+        "source_embedding",
+        "source_insight",
+        "chat_session",
+    }
+)
 
 
 def _ensure_safe_identifier(value: str, kind: str) -> str:
@@ -78,13 +103,23 @@ def ensure_record_id(value: Union[str, RecordID]) -> RecordID:
 @asynccontextmanager
 async def db_connection():
     db = AsyncSurreal(get_database_url())
-    await db.signin(
-        {
-            "username": os.environ.get("SURREAL_USER"),
-            "password": get_database_password(),
-        }
-    )
-    await db.use(get_database_namespace(), get_database_name())
+    jwt = current_jwt.get()
+    if jwt:
+        # Tenant-scoped session: sign in through the user_scope JWT scope so
+        # $auth.id / $auth.role are populated and migration 23 PERMISSIONS are
+        # enforced for this connection.
+        await db.signin({"scope": "user_scope", "token": jwt})
+        await db.use(get_database_namespace(), get_database_name())
+    else:
+        # Root session: used by startup migrations, the worker, and internal
+        # jobs that must bypass tenant PERMISSIONS.
+        await db.signin(
+            {
+                "username": os.environ.get("SURREAL_USER"),
+                "password": get_database_password(),
+            }
+        )
+        await db.use(get_database_namespace(), get_database_name())
     try:
         yield db
     finally:
@@ -117,6 +152,14 @@ async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     data.pop("id", None)
     data["created"] = datetime.now(timezone.utc)
     data["updated"] = datetime.now(timezone.utc)
+    # Tenant stamping (Phase 2.5): records in TENANT_TABLES get an `owner`
+    # pointing at the current request's user, so migration 23 PERMISSIONS
+    # enforce isolation. The owner is stamped here (not via a field DEFAULT)
+    # because $auth is unavailable inside field VALUE/DEFAULT clauses.
+    if table in TENANT_TABLES:
+        owner = current_owner_id.get()
+        if owner and "owner" not in data:
+            data["owner"] = RecordID("user", owner) if ":" not in owner else owner
     try:
         async with db_connection() as connection:
             result = parse_record_ids(await connection.insert(table, data))
