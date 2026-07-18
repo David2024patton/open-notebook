@@ -120,6 +120,10 @@ DEFAULT_EXCLUDED_PATHS = [
     "/api/auth/login",
     "/api/auth/login/2fa",
     "/api/auth/register",
+    "/api/auth/request-code",
+    "/api/auth/verify-code",
+    "/api/auth/register-code",
+    "/api/auth/signup-policy",
     "/api/config",
     "/api/browser/status",
 ]
