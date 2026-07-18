@@ -126,7 +126,7 @@ PERMISSIONS
 -- ===========================================================================
 LET $superuser = (SELECT VALUE id FROM user WHERE role = 'superuser' LIMIT 1);
 
-IF array::len($superuser) > 0 THEN
+IF (array::len($superuser) > 0) THEN
   LET $su = $superuser[0];
   UPDATE notebook SET owner = $su WHERE owner IS NONE;
   UPDATE source SET owner = $su WHERE owner IS NONE;
