@@ -390,18 +390,29 @@ async def _diag_scope(request: Request):
         async with db_connection() as db:
             auth = await db.query("RETURN $auth")
             sid = await db.query("RETURN $session")
-            # Probe a raw scoped CREATE with explicit owner=$auth.id
-            create_res = await db.query(
-                "CREATE notebook SET name = 'diag-probe', owner = $auth.id, "
+            auth_role = await db.query("RETURN $auth.role")
+            auth_active = await db.query("RETURN $auth.is_active")
+            auth_id = await db.query("RETURN $auth.id")
+            # Probe 1: CREATE with explicit owner=$auth.id
+            create_owned = await db.query(
+                "CREATE notebook SET name = 'diag-owned', owner = $auth.id, "
                 "is_global = false RETURN *"
             )
-            # And a plain SELECT to see what's visible
+            # Probe 2: CREATE with no owner (rely on superuser role clause)
+            create_noowner = await db.query(
+                "CREATE notebook SET name = 'diag-noowner', "
+                "is_global = false RETURN *"
+            )
             sel = await db.query("SELECT id, name, owner FROM notebook LIMIT 5")
         return {
             "jwt_present": bool(jwt),
             "auth": auth,
+            "auth_id": auth_id,
+            "auth_role": auth_role,
+            "auth_active": auth_active,
             "session": sid,
-            "create_result": create_res,
+            "create_owned_result": create_owned,
+            "create_noowner_result": create_noowner,
             "select_result": sel,
         }
     except Exception as e:
