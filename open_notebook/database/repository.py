@@ -168,7 +168,10 @@ async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     if table in TENANT_TABLES:
         owner = current_owner_id.get()
         if owner:
-            data["owner"] = RecordID("user", owner) if ":" not in owner else owner
+            # owner is the JWT `sub` (e.g. "user:abc..."). SurrealDB's
+            # PERMISSIONS compare owner = $auth.id using RecordID equality,
+            # so store a RecordID, not a string.
+            data["owner"] = ensure_record_id(owner)
     try:
         async with db_connection() as connection:
             result = parse_record_ids(await connection.insert(table, data))
