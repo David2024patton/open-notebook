@@ -65,71 +65,71 @@ DEFINE FIELD IF NOT EXISTS owner ON chat_session TYPE option<record<user>>;
 -- ===========================================================================
 
 DEFINE TABLE notebook SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE source SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE note SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE source_embedding SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE source_insight SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE chat_session SCHEMAFULL PERMISSIONS FOR
-  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE owner = $auth.id OR is_global = true OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE owner = $auth.id OR $auth.role IN ['admin', 'superuser'];
 
 -- Strictly private tables (never shared, no admin cross-access)
 DEFINE TABLE notification SCHEMAFULL PERMISSIONS FOR
-  select WHERE for_user = $auth.id
-  create WHERE $auth.id IS NOT NONE
-  update WHERE for_user = $auth.id
+  select WHERE for_user = $auth.id,
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE for_user = $auth.id,
   delete WHERE for_user = $auth.id;
 
 DEFINE TABLE user_totp SCHEMAFULL PERMISSIONS FOR
-  select WHERE user_id = $auth.id
-  create WHERE $auth.id IS NOT NONE
-  update WHERE user_id = $auth.id
+  select WHERE user_id = $auth.id,
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE user_id = $auth.id,
   delete WHERE user_id = $auth.id;
 
 -- Management tables (admin/superuser operated; users read their own row)
 DEFINE TABLE user SCHEMAFULL PERMISSIONS FOR
-  select WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.role IN ['admin', 'superuser']
-  update WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser']
+  select WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.role IN ['admin', 'superuser'],
+  update WHERE id = $auth.id OR $auth.role IN ['admin', 'superuser'],
   delete WHERE $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE referral_code SCHEMAFULL PERMISSIONS FOR
-  select WHERE created_by = $auth.id OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.role IN ['admin', 'superuser']
-  update WHERE $auth.role IN ['admin', 'superuser']
+  select WHERE created_by = $auth.id OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.role IN ['admin', 'superuser'],
+  update WHERE $auth.role IN ['admin', 'superuser'],
   delete WHERE $auth.role IN ['admin', 'superuser'];
 
 DEFINE TABLE signup_request SCHEMAFULL PERMISSIONS FOR
-  select WHERE username = $auth.username OR $auth.role IN ['admin', 'superuser']
-  create WHERE $auth.id IS NOT NONE
-  update WHERE $auth.role IN ['admin', 'superuser']
+  select WHERE username = $auth.username OR $auth.role IN ['admin', 'superuser'],
+  create WHERE $auth.id IS NOT NONE,
+  update WHERE $auth.role IN ['admin', 'superuser'],
   delete WHERE $auth.role IN ['admin', 'superuser'];
 
 -- ===========================================================================
