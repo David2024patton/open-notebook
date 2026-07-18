@@ -1,4 +1,4 @@
-﻿-- Migration 24: Fix tenant PERMISSIONS to avoid $auth field-read circularity.
+-- Migration 24: Fix tenant PERMISSIONS to avoid $auth field-read circularity.
 --
 -- Migration 23 referenced $auth.role / $auth.id in table PERMISSIONS. To
 -- resolve $auth.<field>, SurrealDB must READ the user record — but that read
