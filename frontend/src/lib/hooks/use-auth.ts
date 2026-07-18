@@ -21,6 +21,9 @@ export function useAuth() {
     authMode,
     requires2FA,
     verify2FA,
+    requestCode,
+    verifyCode,
+    registerPasswordless,
   } = useAuthStore()
 
   useEffect(() => {
@@ -108,6 +111,29 @@ export function useAuth() {
     router.push('/login')
   }
 
+  // Passwordless OTP: email -> "send code" -> 6-digit code -> verify
+  const handleRequestCode = async (email: string) => {
+    return await requestCode(email)
+  }
+
+  const handleVerifyCode = async (email: string, code: string) => {
+    const success = await verifyCode(email, code)
+    if (success) {
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+      if (redirectPath) {
+        sessionStorage.removeItem('redirectAfterLogin')
+        router.push(redirectPath)
+      } else {
+        router.push('/notebooks')
+      }
+    }
+    return success
+  }
+
+  const handleRegisterPasswordless = async (email: string, name?: string) => {
+    return await registerPasswordless(email, name)
+  }
+
   return {
     isAuthenticated,
     isLoading: isLoading || !hasHydrated,
@@ -124,5 +150,8 @@ export function useAuth() {
     authMode,
     requires2FA,
     verify2FA: handleVerify2FA,
+    requestCode: handleRequestCode,
+    verifyCode: handleVerifyCode,
+    registerPasswordless: handleRegisterPasswordless,
   }
 }

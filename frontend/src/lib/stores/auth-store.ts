@@ -38,6 +38,9 @@ interface AuthState {
   login: (password: string, email?: string) => Promise<boolean>
   verify2FA: (code: string) => Promise<boolean>
   register: (email: string, password: string, name?: string, referralCode?: string) => Promise<RegisterResult>
+  requestCode: (email: string) => Promise<boolean>
+  verifyCode: (email: string, code: string) => Promise<boolean>
+  registerPasswordless: (email: string, name?: string) => Promise<RegisterResult>
   logout: () => void
   checkAuth: () => Promise<boolean>
   updateProfile: (data: { email?: string; display_name?: string }) => Promise<boolean>
@@ -326,12 +329,108 @@ export const useAuthStore = create<AuthState>()(
       },
       
       logout: () => {
-        set({ 
-          isAuthenticated: false, 
-          token: null, 
+        set({
+          isAuthenticated: false,
+          token: null,
           user: null,
-          error: null 
+          error: null
         })
+      },
+
+      // Passwordless OTP login: email -> code -> JWT (Phase 2.5+)
+      requestCode: async (email: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const response = await fetch(`${apiUrl}/api/auth/request-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim().toLowerCase() }),
+          })
+          if (response.ok || response.status === 202) {
+            set({ isLoading: false, error: null })
+            return true
+          }
+          const errorData = await response.json().catch(() => ({}))
+          const errorMessage = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : 'Could not send code'
+          set({ error: errorMessage, isLoading: false })
+          return false
+        } catch (error) {
+          console.error('request-code error:', error)
+          set({ error: 'Network error while requesting code', isLoading: false })
+          return false
+        }
+      },
+
+      verifyCode: async (email: string, code: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const response = await fetch(`${apiUrl}/api/auth/verify-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email.trim().toLowerCase(), code: code.trim() }),
+          })
+          if (response.ok) {
+            const data = await response.json()
+            set({
+              isAuthenticated: true,
+              token: data.access_token,
+              user: data.user,
+              isLoading: false,
+              lastAuthCheck: Date.now(),
+              error: null,
+              requires2FA: false,
+              tempToken: null,
+            })
+            return true
+          }
+          const errorData = await response.json().catch(() => ({}))
+          const errorMessage = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : 'Invalid or expired code'
+          set({ error: errorMessage, isLoading: false })
+          return false
+        } catch (error) {
+          console.error('verify-code error:', error)
+          set({ error: 'Network error while verifying code', isLoading: false })
+          return false
+        }
+      },
+
+      registerPasswordless: async (email: string, name?: string) => {
+        set({ isLoading: true, error: null })
+        try {
+          const apiUrl = await getApiUrl()
+          const state = get()
+          if (state.authMode !== 'multi-user') {
+            set({ error: 'Registration only available in multi-user mode', isLoading: false })
+            return { success: false, autoApproved: false }
+          }
+          const body: Record<string, string> = { email: email.trim().toLowerCase() }
+          if (name) body.display_name = name
+          const response = await fetch(`${apiUrl}/api/auth/register-code`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          if (response.ok || response.status === 202) {
+            set({ isLoading: false, error: null })
+            return { success: true, autoApproved: false }
+          }
+          const errorData = await response.json().catch(() => ({}))
+          const errorMessage = typeof errorData.detail === 'string'
+            ? errorData.detail
+            : 'Registration failed'
+          set({ error: errorMessage, isLoading: false })
+          return { success: false, autoApproved: false }
+        } catch (error) {
+          console.error('register-passwordless error:', error)
+          set({ error: 'Network error during registration', isLoading: false })
+          return { success: false, autoApproved: false }
+        }
       },
 
       updateProfile: async (data: { email?: string; display_name?: string }) => {

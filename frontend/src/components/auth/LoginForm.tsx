@@ -7,61 +7,45 @@ import { useAuthStore } from '@/lib/stores/auth-store'
 import { getConfig } from '@/lib/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { LoadingSpinner } from '@/components/common/LoadingSpinner'
 import { useTranslation } from '@/lib/hooks/use-translation'
 
+type Stage = 'email' | 'code' | 'register'
+
 export function LoginForm() {
   const { t, language } = useTranslation()
-  const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [referralCode, setReferralCode] = useState('')
-  const [isRegistering, setIsRegistering] = useState(false)
-  const [registrationSuccess, setRegistrationSuccess] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [twoFACode, setTwoFACode] = useState('')
-  const { login, register, isLoading, error, requires2FA, verify2FA } = useAuth()
-  const { authRequired, authMode, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
+  const [code, setCode] = useState('')
+  const [stage, setStage] = useState<Stage>('email')
+  const [infoMsg, setInfoMsg] = useState<string | null>(null)
+  const { requestCode, verifyCode, registerPasswordless, isLoading, error, authMode } = useAuth()
+  const { authRequired, checkAuthRequired, hasHydrated, isAuthenticated } = useAuthStore()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [configInfo, setConfigInfo] = useState<{ apiUrl: string; version: string; buildTime: string } | null>(null)
   const router = useRouter()
 
-  // Load config info for debugging
   useEffect(() => {
-    getConfig().then(cfg => {
-      setConfigInfo({
-        apiUrl: cfg.apiUrl,
-        version: cfg.version,
-        buildTime: cfg.buildTime,
+    getConfig()
+      .then((cfg) => {
+        setConfigInfo({ apiUrl: cfg.apiUrl, version: cfg.version, buildTime: cfg.buildTime })
       })
-    }).catch(err => {
-      console.error('Failed to load config:', err)
-    })
+      .catch((err) => console.error('Failed to load config:', err))
   }, [])
 
-  // Check if authentication is required on mount
   useEffect(() => {
-    if (!hasHydrated) {
-      return
-    }
-
+    if (!hasHydrated) return
     const checkAuth = async () => {
       try {
         const required = await checkAuthRequired()
-
-        // If auth is not required, redirect to notebooks
-        if (!required) {
-          router.push('/notebooks')
-        }
-      } catch (error) {
-        console.error('Error checking auth requirement:', error)
+        if (!required) router.push('/notebooks')
+      } catch (e) {
+        console.error('Error checking auth requirement:', e)
       } finally {
         setIsCheckingAuth(false)
       }
     }
-
-    // If we already know auth status, use it
     if (authRequired !== null) {
       if (!authRequired && isAuthenticated) {
         router.push('/notebooks')
@@ -73,7 +57,6 @@ export function LoginForm() {
     }
   }, [hasHydrated, authRequired, checkAuthRequired, router, isAuthenticated])
 
-  // Show loading while checking if auth is required
   if (!hasHydrated || isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -82,25 +65,18 @@ export function LoginForm() {
     )
   }
 
-  // If we still don't know if auth is required (connection error), show error
   if (authRequired === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{t('common.connectionError')}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t('common.unableToConnect')}
-            </p>
+            <p className="text-sm text-muted-foreground">{t('common.unableToConnect')}</p>
           </div>
-
           <div className="flex items-start gap-2 text-red-600 text-sm">
             <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              {error || t('auth.connectErrorHint')}
-            </div>
+            <div className="flex-1">{error || t('auth.connectErrorHint')}</div>
           </div>
-
           {configInfo && (
             <div className="space-y-2 text-xs text-muted-foreground border-t pt-3">
               <div className="font-medium">{t('common.diagnosticInfo')}:</div>
@@ -110,16 +86,9 @@ export function LoginForm() {
                 <div className="break-all">{t('common.apiUrl')}: {configInfo.apiUrl}</div>
                 <div className="break-all">{t('common.frontendUrl')}: {typeof window !== 'undefined' ? window.location.href : 'N/A'}</div>
               </div>
-              <div className="text-xs pt-2">
-                {t('common.checkConsoleLogs')}
-              </div>
             </div>
           )}
-
-          <Button
-            onClick={() => window.location.reload()}
-            className="w-full"
-          >
+          <Button onClick={() => window.location.reload()} className="w-full">
             {t('common.retryConnection')}
           </Button>
         </div>
@@ -127,108 +96,71 @@ export function LoginForm() {
     )
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (requires2FA) {
-      // Handle 2FA verification
-      if (twoFACode.trim()) {
-        try {
-          await verify2FA(twoFACode)
-        } catch (error) {
-          console.error('Unhandled error during 2FA verification:', error)
-        }
-      }
-    } else if (isRegistering) {
-      // Handle registration (email is the username)
-      if (email.trim() && password.trim()) {
-        const result = await register(email, password, name || undefined, referralCode || undefined)
-        if (result.success) {
-          setRegistrationSuccess(true)
-          setIsRegistering(false)
-          setPassword('')
-          setEmail('')
-          setName('')
-          setReferralCode('')
-        }
-      }
-    } else {
-      // Handle login
-      if (authMode === 'multi-user') {
-        if (email.trim() && password.trim()) {
-          try {
-            await login(email, password)
-          } catch (error) {
-            console.error('Unhandled error during login:', error)
-          }
-        }
-      } else {
-        // Single-password mode (email is ignored)
-        if (password.trim()) {
-          try {
-            await login('', password)
-          } catch (error) {
-            console.error('Unhandled error during login:', error)
-          }
-        }
-      }
+    if (!email.trim()) return
+    setInfoMsg(null)
+    const ok = await requestCode(email.trim())
+    if (ok) {
+      setStage('code')
+      setInfoMsg('A 6-digit code has been sent to your email. Enter it below.')
     }
   }
 
-  const toggleMode = () => {
-    setIsRegistering(!isRegistering)
-    setRegistrationSuccess(false)
-    setPassword('')
-    setEmail('')
-    setName('')
-    setReferralCode('')
-    setTwoFACode('')
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!code.trim()) return
+    await verifyCode(email.trim(), code.trim())
   }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) return
+    setInfoMsg(null)
+    const result = await registerPasswordless(email.trim(), name || undefined)
+    if (result.success) {
+      setInfoMsg(
+        'Your request was received. If admin approval is required, you will be able to log in once approved. If auto-approve is on, a code was sent to your email.'
+      )
+      setStage('code')
+    }
+  }
+
+  const backToEmail = () => {
+    setStage('email')
+    setCode('')
+    setInfoMsg(null)
+  }
+
+  const title =
+    stage === 'email'
+      ? t('auth.loginTitle')
+      : stage === 'register'
+        ? t('auth.registerTitle')
+        : 'Enter your code'
+  const desc =
+    stage === 'email'
+      ? t('auth.loginDesc')
+      : stage === 'register'
+        ? t('auth.registerDesc')
+        : 'We sent a 6-digit code to your email'
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {requires2FA ? 'Two-Factor Authentication' : (isRegistering ? t('auth.registerTitle') : t('auth.loginTitle'))}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {requires2FA 
-              ? 'Enter the 6-digit code from your authenticator app'
-              : (isRegistering 
-                ? t('auth.registerDesc')
-                : t('auth.loginDesc')
-              )
-            }
-          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{desc}</p>
         </div>
 
-        {registrationSuccess && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-700 text-sm">
-            Registration successful! Your account is pending admin approval. You'll be able to login once approved.
+        {infoMsg && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-md text-blue-700 text-sm">
+            {infoMsg}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 2FA Code Input */}
-          {requires2FA && (
-            <div>
-              <Input
-                type="text"
-                placeholder="6-digit code"
-                value={twoFACode}
-                onChange={(e) => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                disabled={isLoading}
-                required
-                maxLength={6}
-                autoComplete="one-time-code"
-                autoFocus
-              />
-            </div>
-          )}
-
-          {/* Email field - always shown in multi-user mode */}
-          {!requires2FA && (authMode === 'multi-user' || isRegistering) && (
+        {stage === 'email' && (
+          <form onSubmit={handleSendCode} className="space-y-4">
             <div>
               <Input
                 type="email"
@@ -238,12 +170,100 @@ export function LoginForm() {
                 disabled={isLoading}
                 required
                 autoComplete="email"
+                autoFocus
               />
             </div>
-          )}
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={isLoading || !email.trim()}>
+              {isLoading ? 'Sending...' : 'Send code'}
+            </Button>
+            {authMode === 'multi-user' && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStage('register')
+                    setInfoMsg(null)
+                    setEmail('')
+                    setName('')
+                  }}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={isLoading}
+                >
+                  Don&apos;t have an account? Request access
+                </button>
+              </div>
+            )}
+          </form>
+        )}
 
-          {/* Display name field - only during registration */}
-          {!requires2FA && isRegistering && (
+        {stage === 'code' && (
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div>
+              <Input
+                type="text"
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                disabled={isLoading}
+                required
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+              />
+            </div>
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={isLoading || !code.trim()}>
+              {isLoading ? t('auth.signingIn') : 'Verify'}
+            </Button>
+            <div className="text-center space-y-1">
+              <button
+                type="button"
+                onClick={() => requestCode(email.trim())}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                disabled={isLoading}
+              >
+                Resend code
+              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={backToEmail}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={isLoading}
+                >
+                  Use a different email
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {stage === 'register' && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div>
+              <Input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                required
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
             <div>
               <Input
                 type="text"
@@ -253,107 +273,37 @@ export function LoginForm() {
                 disabled={isLoading}
               />
             </div>
-          )}
-
-          {/* Referral code field - only during registration */}
-          {!requires2FA && isRegistering && (
-            <div>
-              <Input
-                type="text"
-                placeholder="Referral code (optional, for instant access)"
-                value={referralCode}
-                onChange={(e) => setReferralCode(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          )}
-
-          {/* Password field - not shown during 2FA */}
-          {!requires2FA && (
-            <div className="relative">
-              <Input
-                type={showPassword ? 'text' : 'password'}
-                placeholder={t('auth.passwordPlaceholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                required
-                className="pr-10"
-                autoComplete={isRegistering ? 'new-password' : 'current-password'}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          )}
-
-          {error && (
-            <div className="space-y-2">
+            {error && (
               <div className="flex items-center gap-2 text-red-600 text-sm">
                 <AlertCircle className="h-4 w-4" />
                 {error}
               </div>
-              <p className="text-xs text-muted-foreground">
-                If you just changed your password, try{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    localStorage.removeItem('auth-storage')
-                    window.location.reload()
-                  }}
-                  className="underline hover:text-foreground"
-                >
-                  clearing browser data
-                </button>
-                {' '}or use an incognito window.
-              </p>
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading || (requires2FA ? !twoFACode.trim() : (authMode === 'multi-user' ? !email.trim() : false)) || !password.trim()}
-          >
-            {isLoading 
-              ? (isRegistering ? 'Registering...' : t('auth.signingIn'))
-              : (requires2FA ? 'Verify' : (isRegistering ? 'Register' : t('auth.signIn')))
-            }
-          </Button>
-
-          {/* Toggle between login and registration in multi-user mode (not during 2FA) */}
-          {!requires2FA && authMode === 'multi-user' && (
+            )}
+            <Button type="submit" className="w-full" disabled={isLoading || !email.trim()}>
+              {isLoading ? 'Submitting...' : 'Request access'}
+            </Button>
             <div className="text-center">
               <button
                 type="button"
-                onClick={toggleMode}
+                onClick={() => {
+                  setStage('email')
+                  setInfoMsg(null)
+                }}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                 disabled={isLoading}
               >
-                {isRegistering 
-                  ? 'Already have an account? Login'
-                  : "Don't have an account? Register"
-                }
+                Already have an account? Login
               </button>
             </div>
-          )}
+          </form>
+        )}
 
-          {configInfo && (
-            <div className="text-xs text-center text-muted-foreground pt-2 border-t">
-              <div>{t('common.version')} {configInfo.version}</div>
-              <div className="font-mono text-[10px]">{configInfo.apiUrl}</div>
-            </div>
-          )}
-        </form>
+        {configInfo && (
+          <div className="text-xs text-center text-muted-foreground pt-2 border-t">
+            <div>{t('common.version')} {configInfo.version}</div>
+            <div className="font-mono text-[10px]">{configInfo.apiUrl}</div>
+          </div>
+        )}
       </div>
     </div>
   )
