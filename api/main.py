@@ -390,7 +390,20 @@ async def _diag_scope(request: Request):
         async with db_connection() as db:
             auth = await db.query("RETURN $auth")
             sid = await db.query("RETURN $session")
-        return {"jwt_present": bool(jwt), "auth": auth, "session": sid}
+            # Probe a raw scoped CREATE with explicit owner=$auth.id
+            create_res = await db.query(
+                "CREATE notebook SET name = 'diag-probe', owner = $auth.id, "
+                "is_global = false RETURN *"
+            )
+            # And a plain SELECT to see what's visible
+            sel = await db.query("SELECT id, name, owner FROM notebook LIMIT 5")
+        return {
+            "jwt_present": bool(jwt),
+            "auth": auth,
+            "session": sid,
+            "create_result": create_res,
+            "select_result": sel,
+        }
     except Exception as e:
         return {"jwt_present": bool(jwt), "error": f"{type(e).__name__}: {e}"}
 
