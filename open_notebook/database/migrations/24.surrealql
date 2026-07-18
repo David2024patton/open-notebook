@@ -1,16 +1,16 @@
 ﻿-- Migration 24: Fix tenant PERMISSIONS to avoid $auth field-read circularity.
 --
 -- Migration 23 referenced $auth.role / $auth.id in table PERMISSIONS. To
--- resolve $auth.<field>, SurrealDB must READ the user record â€” but that read
+-- resolve $auth.<field>, SurrealDB must READ the user record — but that read
 -- is gated by the user table's own select PERMISSION, which itself references
 -- $auth.role. This circular dependency makes $auth.role resolve to NONE for
 -- every record-user session, so EVERY permission check fails and all
 -- tenant-table reads/writes are denied (even for the owner).
 --
 -- Fix: use claims that do NOT require a DB read:
---   * $auth        â€” the authenticated record id (RecordID), available with
+--   * $auth        — the authenticated record id (RecordID), available with
 --                    no record lookup. Compare with `owner = $auth`.
---   * $token.role  â€” the `role` claim taken directly from the verified JWT
+--   * $token.role  — the `role` claim taken directly from the verified JWT
 --                    (signed by our HS256 key, so trustworthy), available
 --                    with no record lookup. Replaces $auth.role.
 -- The AUTHENTICATE clause (in api/main.py _define_user_scope) still reads
