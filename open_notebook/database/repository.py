@@ -104,7 +104,12 @@ def ensure_record_id(value: Union[str, RecordID]) -> RecordID:
 async def db_connection():
     db = AsyncSurreal(get_database_url())
     jwt = current_jwt.get()
-    if jwt:
+    # DB-enforced scope isolation is opt-in (OPEN_NOTEBOOK_DB_SCOPE_AUTH=1).
+    # Until the SurrealDB v2 ACCESS JWT auth model is fully wired, the app
+    # connects as root (root bypasses migration 23 PERMISSIONS) and isolation
+    # is enforced at the app layer (JWT middleware + owner stamping).
+    scope_auth_enabled = os.environ.get("OPEN_NOTEBOOK_DB_SCOPE_AUTH") == "1"
+    if jwt and scope_auth_enabled:
         # Tenant-scoped session: sign in through the user_scope JWT scope so
         # $auth.id / $auth.role are populated and migration 23 PERMISSIONS are
         # enforced for this connection.

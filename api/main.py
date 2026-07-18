@@ -294,14 +294,19 @@ async def lifespan(app: FastAPI):
 
     # Define the user_scope JWT scope for tenant isolation (Phase 2.5). This
     # must run after migrations (migration 23 defines the PERMISSIONS that the
-    # scope session enforces) and uses the live JWT secret.
+    # scope session enforces) and uses the live JWT secret. NOTE: SurrealDB v2
+    # deprecated DEFINE SCOPE in favour of DEFINE ACCESS ... TYPE JWT; this
+    # definition is best-effort and non-fatal — DB-enforced scope isolation is
+    # gated behind OPEN_NOTEBOOK_DB_SCOPE_AUTH until the v2 ACCESS JWT auth
+    # model is wired. App-layer JWT auth + owner stamping work regardless.
     if is_multi_user_mode():
         try:
             await _define_user_scope()
         except Exception as e:
-            logger.error(f"CRITICAL: Failed to define user_scope: {str(e)}")
-            logger.exception(e)
-            raise RuntimeError(f"Failed to define user_scope: {str(e)}") from e
+            logger.warning(
+                f"Could not define user_scope (non-fatal): {type(e).__name__}. "
+                "DB-enforced scope isolation is disabled; app-layer auth is active."
+            )
 
     # Run podcast profile data migration (legacy strings -> Model registry)
     try:
