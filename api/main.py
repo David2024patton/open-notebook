@@ -376,49 +376,6 @@ app = FastAPI(
 app.add_middleware(RequestTenantBridge)
 
 
-# =============================================================================
-# TEMPORARY DIAGNOSTIC (Phase 2.5): inspect the scoped SurrealDB session.
-# Returns what $auth resolves to under the current request's JWT, so we can
-# verify db.authenticate(token) establishes a record-user session. Remove once
-# scope auth is confirmed working.
-# =============================================================================
-@app.get("/api/_diag/scope")
-async def _diag_scope(request: Request):
-    from open_notebook.database.repository import db_connection, current_jwt
-    jwt = current_jwt.get()
-    try:
-        async with db_connection() as db:
-            auth = await db.query("RETURN $auth")
-            sid = await db.query("RETURN $session")
-            auth_role = await db.query("RETURN $auth.role")
-            auth_active = await db.query("RETURN $auth.is_active")
-            auth_id = await db.query("RETURN $auth.id")
-            # Probe 1: CREATE with explicit owner=$auth.id
-            create_owned = await db.query(
-                "CREATE notebook SET name = 'diag-owned', owner = $auth.id, "
-                "is_global = false RETURN *"
-            )
-            # Probe 2: CREATE with no owner (rely on superuser role clause)
-            create_noowner = await db.query(
-                "CREATE notebook SET name = 'diag-noowner', "
-                "is_global = false RETURN *"
-            )
-            sel = await db.query("SELECT id, name, owner FROM notebook LIMIT 5")
-        return {
-            "jwt_present": bool(jwt),
-            "auth": auth,
-            "auth_id": auth_id,
-            "auth_role": auth_role,
-            "auth_active": auth_active,
-            "session": sid,
-            "create_owned_result": create_owned,
-            "create_noowner_result": create_noowner,
-            "select_result": sel,
-        }
-    except Exception as e:
-        return {"jwt_present": bool(jwt), "error": f"{type(e).__name__}: {e}"}
-
-
 if CORS_IS_DEFAULT_WILDCARD:
     logger.warning(
         "CORS_ORIGINS is not set — API accepts cross-origin requests from any "
