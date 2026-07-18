@@ -124,13 +124,14 @@ PERMISSIONS
 -- 3. One-time backfill: assign orphaned tenant records to the first superuser
 --    so pre-multi-tenancy data is not lost behind the new permissions wall.
 -- ===========================================================================
-LET $superuser = SELECT VALUE id FROM ONLY user WHERE role = 'superuser' ORDER BY created ASC LIMIT 1;
+LET $superuser = (SELECT VALUE id FROM user WHERE role = 'superuser' LIMIT 1);
 
-IF $superuser IS NOT NONE THEN
-  UPDATE notebook SET owner = $superuser WHERE owner IS NONE;
-  UPDATE source SET owner = $superuser WHERE owner IS NONE;
-  UPDATE note SET owner = $superuser WHERE owner IS NONE;
-  UPDATE source_embedding SET owner = $superuser WHERE owner IS NONE;
-  UPDATE source_insight SET owner = $superuser WHERE owner IS NONE;
-  UPDATE chat_session SET owner = $superuser WHERE owner IS NONE;
+IF array::len($superuser) > 0 THEN
+  LET $su = $superuser[0];
+  UPDATE notebook SET owner = $su WHERE owner IS NONE;
+  UPDATE source SET owner = $su WHERE owner IS NONE;
+  UPDATE note SET owner = $su WHERE owner IS NONE;
+  UPDATE source_embedding SET owner = $su WHERE owner IS NONE;
+  UPDATE source_insight SET owner = $su WHERE owner IS NONE;
+  UPDATE chat_session SET owner = $su WHERE owner IS NONE;
 END;
