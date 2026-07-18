@@ -89,15 +89,11 @@ services:
       # (default 5). Set to 1 for sequential processing on single-GPU / local
       # LLM setups to avoid overloading the model with parallel requests.
       # - OPEN_NOTEBOOK_WORKER_MAX_TASKS=1
-    volumes:
-      # No /app/data bind mount: the host bind source got into a read-only /
-      # missing state that made /app/data unwritable and crashed the api at
-      # startup (mkdir /app/data/.cache failed). Without the mount, /app/data
-      # is the image's own writable directory, so the api comes up. Caches
-      # (UV_CACHE_DIR etc.) are redirected to /tmp by supervisord.
-      # Optional: mount your SSH public key for key-based auth
-      # Create a file named authorized_keys with your pubkey, then uncomment:
-      # - ./authorized_keys:/app/ssh/authorized_keys:ro
+    # NOTE: no /app/data bind mount. The host bind source got into a read-only /
+    # missing state that made /app/data unwritable and crashed the api at
+    # startup (mkdir /app/data/.cache failed). Without the mount, /app/data
+    # is the image's own writable directory, so the api comes up. Caches
+    # (UV_CACHE_DIR etc.) are redirected to /tmp by supervisord.
     depends_on:
       - surrealdb
     restart: always
