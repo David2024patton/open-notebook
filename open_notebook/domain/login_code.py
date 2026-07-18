@@ -18,7 +18,7 @@ from typing import Optional
 
 from loguru import logger
 
-from open_notebook.database.repository import repo_create, repo_query
+from open_notebook.database.repository import repo_create, repo_query, repo_query_root
 
 # Code lifetime and attempt limits.
 CODE_TTL_MINUTES = 10
@@ -85,7 +85,7 @@ async def issue_code(email: str) -> str:
     code_hash = await _hash_code(code)
     now = datetime.now(timezone.utc)
     expires = now + timedelta(minutes=CODE_TTL_MINUTES)
-    rec = await repo_create(
+    await repo_create(
         "login_code",
         {
             "email": email,
@@ -94,16 +94,13 @@ async def issue_code(email: str) -> str:
             "consumed": False,
             "created": now,
             "expires": expires,
+            # DEV-MODE only: store the plaintext so the superuser debug endpoint
+            # can surface it without SMTP. Root-only table (PERMISSIONS NONE).
+            # Production email sender would omit this field.
+            "dev_code": code,
         },
     )
-    # repo_create returns the created record (list or dict); extract its id.
-    rid = ""
-    try:
-        rec_list = rec if isinstance(rec, list) else [rec]
-        rid = str(rec_list[0]["id"]) if rec_list else ""
-    except Exception:  # noqa: BLE001
-        rid = ""
-    await send_code(email, code, rid)
+    await send_code(email, code)
     return code
 
 
@@ -165,7 +162,7 @@ async def latest_dev_code(email: str) -> Optional[str]:
     SurrealDB v2.6 lacks `ORDER BY <field>` on this path, so we select all
     live records for the email and pick the newest client-side.
     """
-    rows = await repo_query(
+    rows = await repo_query_root(
         "SELECT dev_code, expires, consumed FROM login_code "
         "WHERE email = $email",
         {"email": email},

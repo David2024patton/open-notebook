@@ -153,6 +153,23 @@ async def repo_query(
             raise
 
 
+async def repo_query_root(
+    query_str: str, vars: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Execute a SurrealQL query as ROOT, bypassing the per-request scoped
+    session. Used by admin/dev helpers that must read root-only tables (e.g.
+    the login_code table, which has PERMISSIONS NONE for record users). Resets
+    current_jwt for the duration of this call so db_connection() opens a root
+    session regardless of the caller's request context.
+    """
+    token = current_jwt.set(None)
+    try:
+        return await repo_query(query_str, vars)
+    finally:
+        current_jwt.reset(token)
+
+
 async def repo_create(table: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new record in the specified table"""
     # Remove 'id' attribute if it exists in data
